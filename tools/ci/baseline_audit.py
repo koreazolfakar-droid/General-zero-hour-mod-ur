@@ -45,7 +45,7 @@ LFS_RE = re.compile(
 TEXT_EXTENSIONS = {
     ".ini", ".inc", ".txt", ".str", ".wnd", ".csf", ".map", ".cfg", ".xml"
 }
-RUSSIA_RE = re.compile(rb"(?i)\b(russia|russian|soviet)\b")
+RUSSIA_RE = re.compile(rb"(?i)(russia|russian|soviet)")
 
 
 class AuditError(RuntimeError):
