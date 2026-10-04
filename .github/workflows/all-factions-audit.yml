@@ -1,0 +1,68 @@
+name: All Factions Structural Audit CI
+
+on:
+  push:
+    branches:
+      - analysis/all-factions-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-factions-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit all playable factions and generals
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build current unified Russian Fix Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/all-factions/patched
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/all-factions/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/all-factions/fixpack-build-validation.json
+
+      - name: Run all-factions audit
+        run: |
+          python3 tools/ci/all_factions_audit.py \
+            'ci-out/all-factions/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions/report
+
+      - name: Print report
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -n '1,520p' ci-out/all-factions/report/all-factions-audit.md
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-all-factions-audit
+          path: ci-out/all-factions/
+          if-no-files-found: error
+          retention-days: 14
