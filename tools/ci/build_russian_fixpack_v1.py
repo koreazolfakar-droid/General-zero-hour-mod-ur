@@ -116,7 +116,7 @@ def find_block(text: str, kind: str, name: str) -> tuple[int, int, str]:
         raise AuditError(f"expected one {kind} {name}, found {len(hits)}")
     start = hits[0].start()
     tail = text[hits[0].end():]
-    end_m = re.search(r"(?mi)^\s*End\s*$", tail)
+    end_m = re.search(r"(?mi)^End\s*$", tail)
     if not end_m:
         raise AuditError(f"unterminated {kind} {name}")
     end = hits[0].end() + end_m.end()
