@@ -141,12 +141,13 @@ def replace_numeric_field(
         raise AuditError(
             f"expected one {field}={old} in target block, found {len(hits)}"
         )
-    if len(old) != len(new):
+    if len(new) > len(old):
         raise AuditError(
-            f"length-preserving numeric edit required: {field} {old}->{new}"
+            f"numeric edit would grow field width: {field} {old}->{new}"
         )
+    rendered = new.ljust(len(old))
     m = hits[0]
-    patched = block[:m.start("value")] + new + block[m.end("value"):]
+    patched = block[:m.start("value")] + rendered + block[m.end("value"):]
     if len(patched) != len(block):
         raise AuditError(f"{field}: block length changed")
     return patched, {"field": field, "from": old, "to": new}
