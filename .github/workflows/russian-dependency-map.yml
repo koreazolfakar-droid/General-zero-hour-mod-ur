@@ -60,3 +60,44 @@ jobs:
           path: ci-out/russia-map/
           if-no-files-found: error
           retention-days: 14
+
+  svu-sniper-audit:
+    name: Audit Russian SVU sniper wiring
+    needs: dependency-map
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only INI and CloseINI archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Inspect SVU sniper and comparable Russian infantry
+        run: |
+          python3 tools/ci/inspect_russian_svu_sniper.py \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/svu-sniper
+
+      - name: Print focused report
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -n '1,320p' ci-out/svu-sniper/svu-sniper-audit.md
+
+      - name: Upload SVU sniper audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-svu-sniper-audit
+          path: ci-out/svu-sniper/
+          if-no-files-found: error
+          retention-days: 14
