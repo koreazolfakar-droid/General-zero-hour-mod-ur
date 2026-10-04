@@ -1,0 +1,86 @@
+name: Project X Re Baseline CI
+
+on:
+  push:
+    branches:
+      - main
+      - ci/baseline-audit
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline-pointers:
+    name: Verify Git LFS baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without downloading large LFS objects
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Show tool versions
+        run: |
+          python3 --version
+          git --version
+          git lfs version
+
+      - name: Self-test BIG parser
+        run: python3 tools/ci/baseline_audit.py self-test
+
+      - name: Verify all original BIG files are valid LFS pointers
+        run: python3 tools/ci/baseline_audit.py pointers --root . --out ci-out/pointers
+
+      - name: Upload LFS baseline report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-lfs-baseline
+          path: ci-out/pointers/
+          if-no-files-found: error
+          retention-days: 14
+
+  targeted-ini-audit:
+    name: Audit INI and CloseINI archives
+    needs: baseline-pointers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only the two configuration archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Validate BIG structure and locate Russian-faction candidates
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/big
+
+      - name: Upload BIG audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-ini-big-audit
+          path: ci-out/big/
+          if-no-files-found: error
+          retention-days: 14
