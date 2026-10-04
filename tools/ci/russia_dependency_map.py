@@ -36,7 +36,7 @@ BLOCK_TYPES = (
 )
 
 BLOCK_RE = re.compile(
-    r"(?m)^[ \t]*(" + "|".join(BLOCK_TYPES) + r")\s+([A-Za-z_][A-Za-z0-9_]*)"
+    r"(?m)^(" + "|".join(BLOCK_TYPES) + r")\\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
 TOKEN_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 
