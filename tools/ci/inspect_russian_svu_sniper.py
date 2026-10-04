@@ -26,6 +26,7 @@ TARGET_OBJECT = "RussiaInfantrySVUSniper"
 TARGET_BUILD_BUTTON = "Command_ConstructRussiaInfantrySVUSniper"
 TARGET_COMMANDSET = "RussianInfantrySVUSniperCommandSet"
 TERMS = ("svu", "sniper")
+SUPPORT_NAMES = ("Command_RussiaCallinGrizonAirdrop", "SpecialAbilityRussianGrizonReinforcements")
 
 
 def compact_body(body: str) -> str:
@@ -133,8 +134,15 @@ def main() -> int:
             ):
                 command_relevant_lines.append({"line": line_no, "text": line.rstrip()})
 
+        support_definitions = []
+        for support_name in SUPPORT_NAMES:
+            support_definitions.extend(
+                definition_record(d) for d in by_name.get(support_name, [])
+            )
+
         result = {
             "status": "ok",
+            "support_definitions": support_definitions,
             "target_object": definition_record(target),
             "target_commandset": TARGET_COMMANDSET,
             "target_commandset_defined": False,
@@ -213,6 +221,21 @@ def main() -> int:
                     f"### {item['name']}",
                     "",
                     f"Source: {item['path']}:{item['start_line']}",
+                    "",
+                    "~~~ini",
+                    item["body"].rstrip(),
+                    "~~~",
+                    "",
+                ]
+            )
+
+        lines.extend(["## Exact support definitions", ""])
+        for item in support_definitions:
+            lines.extend(
+                [
+                    f"### {item[\'kind\']} {item[\'name\']}",
+                    "",
+                    f"Source: {item[\'path\']}:{item[\'start_line\']}",
                     "",
                     "~~~ini",
                     item["body"].rstrip(),
