@@ -101,6 +101,10 @@ def meaningful_ref(relation: str, target: str) -> bool:
         return False
     if relation in {"upgrade", "triggered-by", "conflicts-with"} and not target.startswith("Upgrade_"):
         return False
+    # These veterancy upgrades are engine-provided implicit status upgrades;
+    # they are intentionally referenced without Upgrade.ini definitions.
+    if target.startswith("Upgrade_Veterancy_"):
+        return False
     if relation == "command-set" and "CommandSet" not in target:
         return False
     if relation == "command-button" and not target.startswith("Command_"):

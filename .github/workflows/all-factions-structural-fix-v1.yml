@@ -1,0 +1,193 @@
+name: All Factions Structural Fix V1 CI
+
+on:
+  push:
+    branches:
+      - fix/all-factions-structural-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-factions-structural-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify America China GLA structural repairs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build validated Russian Fix Pack baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/all-factions-structural-v1/stage1
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/all-factions-structural-v1/stage1/!!ProjectXRe_INI.big' \
+            --report ci-out/all-factions-structural-v1/russian-build-validation.json
+
+      - name: Build additive all-factions structural fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/all-factions-structural-v1/patched
+          python3 tools/ci/build_all_factions_structural_v1.py \
+            --source 'ci-out/all-factions-structural-v1/stage1/!!ProjectXRe_INI.big' \
+            --commandsets patches/all-factions-structural-v1/CommandSet.addition.ini \
+            --ocls patches/all-factions-structural-v1/ObjectCreationList.addition.ini \
+            --output 'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/all-factions-structural-v1/build-validation.json
+
+      - name: Validate rebuilt BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-structural-v1/big-audit
+
+      - name: Verify additive definitions
+        run: |
+          python3 tools/ci/verify_all_factions_structural_v1.py \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/all-factions-structural-v1/additions-verification.json
+
+      - name: Re-run canonical faction identity audit
+        run: |
+          python3 tools/ci/faction_identity_audit.py \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            --manifest config/faction-identity-map.json \
+            --out ci-out/all-factions-structural-v1/faction-identity
+
+      - name: Re-run full all-factions structural audit
+        run: |
+          python3 tools/ci/all_factions_audit.py \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-structural-v1/all-factions-audit
+
+      - name: Re-run Russian Fix Pack verification
+        run: |
+          python3 tools/ci/verify_russian_fixpack_v1.py \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/all-factions-structural-v1/russian-fixpack-verification.json
+
+      - name: Re-run Russian mobility regression audit
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/all-factions-structural-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-structural-v1/mobility-audit
+
+      - name: Full regression gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          base='ci-out/all-factions-structural-v1'
+          build=json.load(open(f'{base}/build-validation.json',encoding='utf-8'))
+          additions=json.load(open(f'{base}/additions-verification.json',encoding='utf-8'))
+          identity=json.load(open(f'{base}/faction-identity/faction-identity-audit.json',encoding='utf-8'))
+          factions=json.load(open(f'{base}/all-factions-audit/all-factions-audit.json',encoding='utf-8'))
+          russian=json.load(open(f'{base}/russian-fixpack-verification.json',encoding='utf-8'))
+          mobility=json.load(open(f'{base}/mobility-audit/russian-mobility-audit.json',encoding='utf-8'))
+
+          if build['entry_count'] != 622:
+              raise SystemExit(f"BIG entry count changed: {build['entry_count']}")
+          if build['unchanged_entries'] != 620:
+              raise SystemExit(
+                  f"Expected 620 entries byte-identical to integrated input, got {build['unchanged_entries']}"
+              )
+
+          changed={
+              x['path'].replace('\\','/').lower()
+              for x in build['changed_entries']
+          }
+          expected={
+              'data/ini/commandset.ini',
+              'data/ini/objectcreationlist.ini',
+          }
+          if changed != expected:
+              raise SystemExit(f'Unexpected stage-2 changed entries: {sorted(changed)}')
+
+          if additions['added_commandset_count'] != 5:
+              raise SystemExit('Expected exactly 5 additive CommandSet repairs')
+          if additions['added_ocl_count'] != 17:
+              raise SystemExit('Expected exactly 17 additive OCL repairs')
+
+          if identity['status'] != 'ok' or identity['combat_factions'] != 5:
+              raise SystemExit('Canonical faction identities regressed')
+
+          combat={
+              f['family']: f
+              for f in factions['factions']
+              if f['family'] not in {'Civilian','Observer'}
+          }
+          expected_families={'America','Europe','China','GLA','Russia'}
+          if set(combat) != expected_families:
+              raise SystemExit(f"Unexpected combat factions: {sorted(combat)}")
+
+          unresolved={
+              family: combat[family]['typed_unresolved_count']
+              for family in sorted(combat)
+          }
+          if any(unresolved.values()):
+              raise SystemExit(f'Combat faction unresolved refs remain: {unresolved}')
+
+          if russian['status'] != 'ok':
+              raise SystemExit('Russian Fix Pack verification regressed')
+          if mobility['summary']['missing_locomotors'] != 0:
+              raise SystemExit('A locomotor became unresolved')
+          if mobility['summary']['findings'] != 23:
+              raise SystemExit(
+                  f"Russian mobility findings regressed: {mobility['summary']['findings']}"
+              )
+
+          print('OK: All Factions Structural Fix V1 regression gate passed')
+          print('OK: America/Europe/China/GLA/Russia active typed unresolved refs = 0')
+          print('OK: Russian fixes, Topol flow, SVU, mobility and Heavy Launchers V2 preserved')
+          print('OK: no original definition was deleted or renamed')
+          PY
+
+      - name: Print concise reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== BUILD ==='
+          cat ci-out/all-factions-structural-v1/build-validation.json
+          echo '=== ADDITIONS ==='
+          cat ci-out/all-factions-structural-v1/additions-verification.json
+          echo '=== ALL FACTIONS ==='
+          sed -n '1,360p' ci-out/all-factions-structural-v1/all-factions-audit/all-factions-audit.md
+          echo '=== IDENTITY ==='
+          cat ci-out/all-factions-structural-v1/faction-identity/faction-identity-audit.md
+          echo '=== MOBILITY ==='
+          sed -n '1,140p' ci-out/all-factions-structural-v1/mobility-audit/russian-mobility-audit.md
+
+      - name: Upload test-ready structural fix pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-all-factions-structural-fix-v1
+          path: ci-out/all-factions-structural-v1/
+          if-no-files-found: error
+          retention-days: 14

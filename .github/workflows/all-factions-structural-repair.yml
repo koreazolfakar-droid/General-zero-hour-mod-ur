@@ -1,0 +1,65 @@
+name: All Factions Structural Repair Analysis CI
+
+on:
+  push:
+    branches:
+      - fix/all-factions-structural-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-factions-repair-analysis-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Analyze remaining America China GLA structural refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build current Russian Fix Pack baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/all-factions-repair/patched
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/all-factions-repair/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/all-factions-repair/fixpack-build-validation.json
+
+      - name: Run focused repair audit
+        run: |
+          python3 tools/ci/all_factions_repair_audit.py \
+            'ci-out/all-factions-repair/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-repair/report
+
+      - name: Print focused report
+        run: sed -n '1,900p' ci-out/all-factions-repair/report/all-factions-repair-audit.md
+
+      - name: Upload repair analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-all-factions-repair-analysis
+          path: ci-out/all-factions-repair/
+          if-no-files-found: error
+          retention-days: 14
