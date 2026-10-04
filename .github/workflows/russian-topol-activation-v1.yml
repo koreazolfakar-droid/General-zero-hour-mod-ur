@@ -1,0 +1,131 @@
+name: Russian Topol Activation V1 Fix CI
+
+on:
+  push:
+    branches:
+      - fix/russian-topol-activation-v1
+  pull_request:
+    branches:
+      - analysis/russian-topol-activation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: topol-activation-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify Topol activation V1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build byte-minimal Topol V1 archive
+        run: |
+          mkdir -p ci-out/topol-v1/patched
+          python3 tools/ci/build_russian_topol_activation_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --spec patches/russian-topol-activation-v1/topol-activation-fix.json \
+            --output 'ci-out/topol-v1/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/topol-v1/build-validation.json
+
+      - name: Validate BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/topol-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/topol-v1/big-audit
+
+      - name: Re-run Topol activation audit against fixed archive
+        run: |
+          python3 tools/ci/russian_topol_activation_audit.py \
+            'ci-out/topol-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/topol-v1/topol-audit
+
+      - name: Gate on activation-chain fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          build = json.load(open(
+              'ci-out/topol-v1/build-validation.json',
+              encoding='utf-8'
+          ))
+          audit = json.load(open(
+              'ci-out/topol-v1/topol-audit/topol-activation-audit.json',
+              encoding='utf-8'
+          ))
+
+          if build['archive_size'] != 27160453:
+              raise SystemExit(
+                  f"Archive size changed unexpectedly: {build['archive_size']}"
+              )
+          if build['unchanged_entries'] < 620:
+              raise SystemExit(
+                  f"Too many BIG entries changed: unchanged={build['unchanged_entries']}"
+              )
+          if len(build['changed_entries']) > 2:
+              raise SystemExit(
+                  f"Expected at most two changed INI entries, got {len(build['changed_entries'])}"
+              )
+
+          checks = audit['dependency_checks']
+          if not checks['icbm_purchase_is_active_somewhere']:
+              raise SystemExit('ICBM purchase button is still not active')
+          if 'Command_TacticalNuclearStrike' in audit['commandsets']['base']['buttons']:
+              raise SystemExit('Unarmed Topol still exposes the fire button')
+          if 'Command_TacticalNuclearStrike' not in audit['commandsets']['armed']['buttons']:
+              raise SystemExit('Armed Topol lost the nuclear fire button')
+          if not checks['rider2_weapon_correct']:
+              raise SystemExit('Armed Topol does not use TopolMissileWeapon')
+
+          if audit['rearm']['build_time'] != '180':
+              raise SystemExit(
+                  f"Rearm BuildTime expected 180, got {audit['rearm']['build_time']}"
+              )
+          if audit['rearm']['build_cost'] != '5000':
+              raise SystemExit(
+                  f"Rearm BuildCost unexpectedly changed: {audit['rearm']['build_cost']}"
+              )
+
+          if audit['findings']:
+              raise SystemExit(
+                  'Topol activation audit still reports findings: '
+                  + '; '.join(x['code'] for x in audit['findings'])
+              )
+
+          print('OK: Topol V1 activation chain is fully resolved')
+          PY
+
+      - name: Print validation reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/topol-v1/build-validation.json
+          cat ci-out/topol-v1/topol-audit/topol-activation-audit.md
+
+      - name: Upload test-ready Topol V1 archive and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russian-topol-activation-v1
+          path: ci-out/topol-v1/
+          if-no-files-found: error
+          retention-days: 14
