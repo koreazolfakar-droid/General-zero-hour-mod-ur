@@ -58,11 +58,11 @@
     "BuratinoLocomotor": {
       "TurnRate": {
         "from": 40,
-        "to": 50
+        "to": 52
       },
       "TurnRateDamaged": {
         "from": 40,
-        "to": 45
+        "to": 48
       },
       "Speed": {
         "from": 40,
