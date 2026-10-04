@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "policy": "Keep engine-facing legacy PlayerTemplate IDs for Zero Hour/map compatibility; expose a canonical faction identity to tooling, Android integration, diagnostics, and future engine adapters.",
+  "factions": [
+    {
+      "canonical_id": "FactionAmerica",
+      "canonical_name": "America",
+      "engine_player_template": "FactionAmerica",
+      "engine_side": "America",
+      "base_side": "USA",
+      "display_name": "INI:FactionAmerica",
+      "intrinsic_science": "SCIENCE_AMERICA",
+      "starting_building": "AmericaCommandCenter",
+      "identity_objects": [
+        "FactionAmerica",
+        "IAmAmerica"
+      ],
+      "science_commandsets": [
+        "SCIENCE_AMERICA_CommandSetRank1",
+        "SCIENCE_AMERICA_CommandSetRank3",
+        "SCIENCE_AMERICA_CommandSetRank8"
+      ],
+      "special_power_commandset": "SpecialPowerShortcutUSA"
+    },
+    {
+      "canonical_id": "FactionChina",
+      "canonical_name": "China",
+      "engine_player_template": "FactionChina",
+      "engine_side": "China",
+      "base_side": "China",
+      "display_name": "INI:FactionChina",
+      "intrinsic_science": "SCIENCE_CHINA",
+      "starting_building": "ChinaCommandCenter",
+      "identity_objects": [
+        "FactionChina",
+        "IAmChina"
+      ],
+      "science_commandsets": [
+        "SCIENCE_CHINA_CommandSetRank1",
+        "SCIENCE_CHINA_CommandSetRank3",
+        "SCIENCE_CHINA_CommandSetRank8"
+      ],
+      "special_power_commandset": "SpecialPowerShortcutChina"
+    },
+    {
+      "canonical_id": "FactionGLA",
+      "canonical_name": "GLA",
+      "engine_player_template": "FactionGLA",
+      "engine_side": "GLA",
+      "base_side": "GLA",
+      "display_name": "INI:FactionGLA",
+      "intrinsic_science": "SCIENCE_GLA",
+      "starting_building": "GLACommandCenter",
+      "identity_objects": [
+        "FactionGLA",
+        "IAmGLA"
+      ],
+      "science_commandsets": [
+        "SCIENCE_GLA_CommandSetRank1",
+        "SCIENCE_GLA_CommandSetRank3",
+        "SCIENCE_GLA_CommandSetRank8"
+      ],
+      "special_power_commandset": "SpecialPowerShortcutGLA"
+    },
+    {
+      "canonical_id": "FactionRussia",
+      "canonical_name": "Russia",
+      "engine_player_template": "FactionAmericaLaserGeneral",
+      "legacy_slot": "LaserGeneral",
+      "engine_side": "AmericaLaserGeneral",
+      "base_side": "China",
+      "display_name": "INI:FactionRussia",
+      "intrinsic_science": "SCIENCE_Russia",
+      "starting_building": "RussiaCommandCenter",
+      "identity_objects": [
+        "FactionRussia",
+        "IAmRussia"
+      ],
+      "science_commandsets": [
+        "SCIENCE_Russia_CommandSetRank1",
+        "SCIENCE_Russia_CommandSetRank3",
+        "SCIENCE_Russia_CommandSetRank8"
+      ],
+      "special_power_commandset": "SpecialPowerShortcutRussia"
+    },
+    {
+      "canonical_id": "FactionEurope",
+      "canonical_name": "Europe",
+      "engine_player_template": "FactionAmericaSuperWeaponGeneral",
+      "legacy_slot": "SuperWeaponGeneral",
+      "engine_side": "AmericaSuperWeaponGeneral",
+      "base_side": "USA",
+      "display_name": "INI:FactionEurope",
+      "intrinsic_science": "SCIENCE_Europe",
+      "starting_building": "EuropeCommandCenter",
+      "identity_objects": [
+        "FactionEurope",
+        "IAmEurope"
+      ],
+      "science_commandsets": [
+        "SCIENCE_Europe_CommandSetRank1",
+        "SCIENCE_Europe_CommandSetRank3",
+        "SCIENCE_Europe_CommandSetRank8"
+      ],
+      "special_power_commandset": "SpecialPowerShortcutEurope"
+    }
+  ]
+}
