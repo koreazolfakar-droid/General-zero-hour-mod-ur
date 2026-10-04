@@ -1,0 +1,62 @@
+name: Russian Faction Dependency CI
+
+on:
+  push:
+    branches:
+      - analysis/russian-dependency-map
+  pull_request:
+    branches:
+      - ci/baseline-audit
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: russian-dependency-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-map:
+    name: Build Russian dependency map
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Self-test dependency mapper
+        run: python3 tools/ci/russia_dependency_map.py --self-test
+
+      - name: Download only INI and CloseINI archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build dependency graph
+        run: |
+          python3 tools/ci/russia_dependency_map.py \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russia-map
+
+      - name: Print concise report
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -n '1,220p' ci-out/russia-map/russia-dependency-map.md
+
+      - name: Upload Russian dependency artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russian-dependency-map
+          path: ci-out/russia-map/
+          if-no-files-found: error
+          retention-days: 14
