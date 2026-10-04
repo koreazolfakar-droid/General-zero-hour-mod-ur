@@ -1,0 +1,190 @@
+name: All Factions Integration V1 CI
+
+on:
+  push:
+    branches:
+      - integration/all-factions-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-factions-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Build and validate all-factions integration V1
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build unified Russian Fix Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/all-factions-v1/patched
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/all-factions-v1/fixpack-build-validation.json
+
+      - name: Validate rebuilt BIG
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-v1/big-audit
+
+      - name: Verify Russian integrated fixes
+        run: |
+          python3 tools/ci/verify_russian_fixpack_v1.py \
+            'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/all-factions-v1/russian-fixpack-verification.json
+
+      - name: Verify canonical faction identities
+        run: |
+          python3 tools/ci/faction_identity_audit.py \
+            'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            --manifest config/faction-identity-map.json \
+            --out ci-out/all-factions-v1/faction-identity
+
+      - name: Audit all playable factions
+        run: |
+          python3 tools/ci/all_factions_audit.py \
+            'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-v1/all-factions-audit
+
+      - name: Re-run mobility regression audit
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/all-factions-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/all-factions-v1/mobility-audit
+
+      - name: All-factions integration regression gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          base = 'ci-out/all-factions-v1'
+
+          build = json.load(open(
+              f'{base}/fixpack-build-validation.json', encoding='utf-8'
+          ))
+          russian = json.load(open(
+              f'{base}/russian-fixpack-verification.json', encoding='utf-8'
+          ))
+          identity = json.load(open(
+              f'{base}/faction-identity/faction-identity-audit.json',
+              encoding='utf-8'
+          ))
+          factions = json.load(open(
+              f'{base}/all-factions-audit/all-factions-audit.json',
+              encoding='utf-8'
+          ))
+          mobility = json.load(open(
+              f'{base}/mobility-audit/russian-mobility-audit.json',
+              encoding='utf-8'
+          ))
+
+          if build['entry_count'] != 622:
+              raise SystemExit(f"Unexpected BIG entry count: {build['entry_count']}")
+          if build['unchanged_entries'] != 618:
+              raise SystemExit(
+                  f"Expected 618 byte-identical entries, got {build['unchanged_entries']}"
+              )
+          if russian['status'] != 'ok':
+              raise SystemExit('Russian Fix Pack verification failed')
+          if identity['status'] != 'ok' or identity['combat_factions'] != 5:
+              raise SystemExit('Canonical faction identity verification failed')
+
+          lookup = identity['canonical_lookup']
+          expected_lookup = {
+              'FactionAmerica': 'FactionAmerica',
+              'FactionChina': 'FactionChina',
+              'FactionGLA': 'FactionGLA',
+              'FactionAmericaLaserGeneral': 'FactionRussia',
+              'FactionAmericaSuperWeaponGeneral': 'FactionEurope',
+          }
+          if lookup != expected_lookup:
+              raise SystemExit(f'Canonical faction lookup changed: {lookup}')
+
+          by_family = {
+              f['family']: f
+              for f in factions['factions']
+              if f['family'] not in {'Civilian', 'Observer'}
+          }
+          if set(by_family) != {'America', 'China', 'Europe', 'GLA', 'Russia'}:
+              raise SystemExit(
+                  f"Unexpected combat faction set: {sorted(by_family)}"
+              )
+
+          # Current structural baseline before China/GLA repair passes.
+          expected_unresolved = {
+              'America': 1,
+              'Europe': 0,
+              'Russia': 0,
+              'China': 14,
+              'GLA': 10,
+          }
+          for family, count in expected_unresolved.items():
+              actual = by_family[family]['typed_unresolved_count']
+              if actual != count:
+                  raise SystemExit(
+                      f'{family} unresolved baseline changed: expected {count}, got {actual}'
+                  )
+
+          if mobility['summary']['missing_locomotors'] != 0:
+              raise SystemExit('Integration introduced a missing locomotor')
+          if mobility['summary']['findings'] != 23:
+              raise SystemExit(
+                  f"Mobility regression: expected 23 findings, got "
+                  f"{mobility['summary']['findings']}"
+              )
+
+          print('OK: All Factions Integration V1 regression gate passed')
+          print('OK: America, China, GLA, Russia, Europe identities are canonical')
+          print('OK: Russia Fix Pack and Heavy Launchers V2 remain intact')
+          print('NEXT: China has 14 structural refs; GLA has 10')
+          PY
+
+      - name: Print concise integration reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== CANONICAL FACTIONS ==='
+          cat ci-out/all-factions-v1/faction-identity/faction-identity-audit.md
+          echo '=== ALL FACTIONS STRUCTURAL AUDIT ==='
+          sed -n '1,320p' ci-out/all-factions-v1/all-factions-audit/all-factions-audit.md
+          echo '=== RUSSIAN MOBILITY SUMMARY ==='
+          sed -n '1,130p' ci-out/all-factions-v1/mobility-audit/russian-mobility-audit.md
+
+      - name: Upload test-ready All Factions V1 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-all-factions-integration-v1
+          path: |
+            ci-out/all-factions-v1/
+            config/faction-identity-map.json
+          if-no-files-found: error
+          retention-days: 14

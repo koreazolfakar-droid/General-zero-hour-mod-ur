@@ -1,0 +1,101 @@
+name: Canonical Faction Identity V1 CI
+
+on:
+  push:
+    branches:
+      - fix/canonical-faction-identity-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-faction-identity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  identity:
+    name: Verify canonical faction identities
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build current unified Russian Fix Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/faction-identity/patched
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/faction-identity/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/faction-identity/fixpack-build-validation.json
+
+      - name: Verify canonical identity mapping
+        run: |
+          python3 tools/ci/faction_identity_audit.py \
+            'ci-out/faction-identity/patched/!!ProjectXRe_INI.big' \
+            --manifest config/faction-identity-map.json \
+            --out ci-out/faction-identity/report
+
+      - name: Regression gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          p = 'ci-out/faction-identity/report/faction-identity-audit.json'
+          report = json.load(open(p, encoding='utf-8'))
+
+          if report['status'] != 'ok':
+              raise SystemExit('Faction identity audit did not pass')
+          if report['combat_factions'] != 5:
+              raise SystemExit(
+                  f"Expected 5 combat factions, got {report['combat_factions']}"
+              )
+          if report['legacy_alias_count'] != 2:
+              raise SystemExit(
+                  f"Expected 2 legacy aliases, got {report['legacy_alias_count']}"
+              )
+
+          expected = {
+              'FactionAmerica': 'FactionAmerica',
+              'FactionChina': 'FactionChina',
+              'FactionGLA': 'FactionGLA',
+              'FactionAmericaLaserGeneral': 'FactionRussia',
+              'FactionAmericaSuperWeaponGeneral': 'FactionEurope',
+          }
+          if report['canonical_lookup'] != expected:
+              raise SystemExit(
+                  f"Canonical lookup changed: {report['canonical_lookup']}"
+              )
+
+          print('OK: all five combat factions have stable canonical identities')
+          print('OK: Russia/Europe compatibility aliases preserved safely')
+          PY
+
+      - name: Print report
+        run: cat ci-out/faction-identity/report/faction-identity-audit.md
+
+      - name: Upload identity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-canonical-faction-identity-v1
+          path: ci-out/faction-identity/
+          if-no-files-found: error
+          retention-days: 14
