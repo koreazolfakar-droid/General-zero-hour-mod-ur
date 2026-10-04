@@ -233,9 +233,9 @@ def main() -> int:
         for item in support_definitions:
             lines.extend(
                 [
-                    f"### {item[\'kind\']} {item[\'name\']}",
+                    "### {} {}".format(item["kind"], item["name"]),
                     "",
-                    f"Source: {item[\'path\']}:{item[\'start_line\']}",
+                    "Source: {}:{}".format(item["path"], item["start_line"]),
                     "",
                     "~~~ini",
                     item["body"].rstrip(),
