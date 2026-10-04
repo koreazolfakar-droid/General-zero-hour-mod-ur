@@ -1,0 +1,133 @@
+name: Russian Mobility V1 Fix CI
+
+on:
+  push:
+    branches:
+      - fix/russian-mobility-v1
+  pull_request:
+    branches:
+      - analysis/russian-mobility-pathfinding
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: russian-mobility-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify Russian mobility V1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build minimal mobility V1 archive
+        run: |
+          mkdir -p ci-out/russian-mobility-v1/patched
+          python3 tools/ci/build_russian_mobility_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --spec patches/russian-mobility-v1/mobility-changes.json \
+            --output 'ci-out/russian-mobility-v1/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/russian-mobility-v1/build-validation.json
+
+      - name: Validate rebuilt BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/russian-mobility-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russian-mobility-v1/big-audit
+
+      - name: Re-run mobility audit against patched archive
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/russian-mobility-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russian-mobility-v1/mobility-audit
+
+      - name: Gate on structural and mobility regression checks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          build = json.load(open(
+              'ci-out/russian-mobility-v1/build-validation.json',
+              encoding='utf-8'
+          ))
+          audit = json.load(open(
+              'ci-out/russian-mobility-v1/mobility-audit/russian-mobility-audit.json',
+              encoding='utf-8'
+          ))
+
+          if build['unchanged_entries'] != 621:
+              raise SystemExit(
+                  f"Expected 621 unchanged BIG entries, got {build['unchanged_entries']}"
+              )
+          if len(build['changed_entries']) != 1:
+              raise SystemExit('Expected exactly one changed BIG entry')
+          if audit['summary']['missing_locomotors'] != 0:
+              raise SystemExit('Mobility V1 introduced a missing locomotor')
+          if audit['summary']['findings'] >= 36:
+              raise SystemExit(
+                  f"Mobility findings did not improve: {audit['summary']['findings']}"
+              )
+          if audit['summary']['upgrade_replacement_edges'] != 0:
+              raise SystemExit(
+                  'Unexpected replace-object mobility upgrade detected'
+              )
+
+          expected = {
+              ('SentinelTankLocomotor', 'TurnRate'): 40.0,
+              ('SentinelTankLocomotor', 'Acceleration'): 35.0,
+              ('GolemLocomotor', 'TurnRate'): 45.0,
+              ('GolemLocomotor', 'Acceleration'): 40.0,
+              ('ScudLauncherLocomotor', 'TurnRate'): 35.0,
+              ('ScudLauncherLocomotor', 'MinTurnSpeed'): 0.0,
+              ('TopolLocomotor', 'TurnRate'): 35.0,
+              ('TopolLocomotor', 'MinTurnSpeed'): 0.0,
+              ('BuratinoLocomotor', 'TurnRate'): 50.0,
+              ('KodiakTankLocomotor', 'TurnRate'): 50.0,
+          }
+          actual = {
+              (x['locomotor'], x['field']): float(x['value'])
+              for x in build['verified_values']
+          }
+          for key, value in expected.items():
+              if actual.get(key) != value:
+                  raise SystemExit(f'{key} expected {value}, got {actual.get(key)}')
+
+          print(
+              'OK: mobility V1 regression gate passed; '
+              f"findings {audit['summary']['findings']} < baseline 36"
+          )
+          PY
+
+      - name: Print concise before-test report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/russian-mobility-v1/build-validation.json
+          sed -n '1,220p' ci-out/russian-mobility-v1/mobility-audit/russian-mobility-audit.md
+
+      - name: Upload test-ready Mobility V1 archive and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russian-mobility-v1
+          path: ci-out/russian-mobility-v1/
+          if-no-files-found: error
+          retention-days: 14
