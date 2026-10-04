@@ -1,0 +1,164 @@
+name: Russian Fix Pack V1 Integration CI
+
+on:
+  push:
+    branches:
+      - integration/russian-fixpack-v1
+  pull_request:
+    branches:
+      - analysis/russian-dependency-map
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: russian-fixpack-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Build and validate unified Russian Fix Pack V1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build unified Russian Fix Pack V1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/russian-fixpack-v1/patched
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/russian-fixpack-v1/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/russian-fixpack-v1/build-validation.json
+
+      - name: Validate rebuilt BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/russian-fixpack-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russian-fixpack-v1/big-audit
+
+      - name: Verify all integrated fixes
+        run: |
+          python3 tools/ci/verify_russian_fixpack_v1.py \
+            'ci-out/russian-fixpack-v1/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/russian-fixpack-v1/integration-verification.json
+
+      - name: Rebuild Russian dependency map
+        run: |
+          python3 tools/ci/russia_dependency_map.py \
+            'ci-out/russian-fixpack-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russian-fixpack-v1/dependency-map
+
+      - name: Re-run full Russian mobility audit
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/russian-fixpack-v1/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russian-fixpack-v1/mobility-audit
+
+      - name: Integration regression gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          base = 'ci-out/russian-fixpack-v1'
+          build = json.load(open(f'{base}/build-validation.json', encoding='utf-8'))
+          verify = json.load(open(f'{base}/integration-verification.json', encoding='utf-8'))
+          deps = json.load(open(f'{base}/dependency-map/russia-dependency-map.json', encoding='utf-8'))
+          mobility = json.load(open(f'{base}/mobility-audit/russian-mobility-audit.json', encoding='utf-8'))
+
+          expected_paths = {
+              'data/ini/locomotor.ini',
+              'data/ini/commandset.ini',
+              'data/ini/upgrade.ini',
+              'data/ini/object/russia/russiasystemobjects.ini',
+          }
+          actual_paths = {
+              x['path'].replace('\\', '/').lower()
+              for x in build['changed_entries']
+          }
+
+          if build['entry_count'] != 622:
+              raise SystemExit(f"Expected 622 BIG entries, got {build['entry_count']}")
+          if build['unchanged_entries'] != 618:
+              raise SystemExit(
+                  f"Expected 618 byte-identical entries, got {build['unchanged_entries']}"
+              )
+          if actual_paths != expected_paths:
+              raise SystemExit(
+                  f"Unexpected changed entries: {sorted(actual_paths)}"
+              )
+          if build['size_delta'] != 396:
+              raise SystemExit(
+                  f"Expected +396 byte archive delta, got {build['size_delta']}"
+              )
+          if verify['status'] != 'ok':
+              raise SystemExit('Integrated fix verifier did not pass')
+
+          unresolved = deps['summary']['potential_unresolved_russian_refs']
+          if unresolved != 2:
+              raise SystemExit(
+                  f"Expected 2 remaining dormant unresolved refs, got {unresolved}"
+              )
+          bad_svu = [
+              x for x in deps['potential_unresolved_russian_refs']
+              if x['source'] == 'RussiaInfantrySVUSniper'
+              or x['target'] == 'RussianInfantrySVUSniperCommandSet'
+          ]
+          if bad_svu:
+              raise SystemExit(f'SVU still unresolved: {bad_svu}')
+
+          if mobility['summary']['missing_locomotors'] != 0:
+              raise SystemExit('Integration introduced a missing locomotor')
+          if mobility['summary']['findings'] != 23:
+              raise SystemExit(
+                  f"Expected 23 mobility findings, got {mobility['summary']['findings']}"
+              )
+
+          print('OK: Russian Fix Pack V1 integration regression gate passed')
+          print('OK: SVU fixed, Topol activation fixed, Topol giant shadows disabled')
+          print('OK: Mobility V1 + Heavy Launchers Speed V2 preserved')
+          PY
+
+      - name: Print concise integration report
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== BUILD VALIDATION ==='
+          cat ci-out/russian-fixpack-v1/build-validation.json
+          echo '=== INTEGRATION VERIFICATION ==='
+          cat ci-out/russian-fixpack-v1/integration-verification.json
+          echo '=== DEPENDENCY SUMMARY ==='
+          sed -n '1,110p' ci-out/russian-fixpack-v1/dependency-map/russia-dependency-map.md
+          echo '=== MOBILITY SUMMARY ==='
+          sed -n '1,130p' ci-out/russian-fixpack-v1/mobility-audit/russian-mobility-audit.md
+
+      - name: Upload test-ready unified Fix Pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russian-fixpack-v1
+          path: ci-out/russian-fixpack-v1/
+          if-no-files-found: error
+          retention-days: 14
