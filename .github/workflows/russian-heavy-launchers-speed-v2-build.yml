@@ -1,0 +1,155 @@
+name: Russian Heavy Launchers Speed V2 Build CI
+
+on:
+  push:
+    branches:
+      - fix/russian-heavy-launchers-speed-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heavy-launchers-v2-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify Heavy Launchers Speed V2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build cumulative Mobility V2 archive
+        run: |
+          mkdir -p ci-out/heavy-launchers-v2/patched
+          python3 tools/ci/build_russian_mobility_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --output 'ci-out/heavy-launchers-v2/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/heavy-launchers-v2/build-validation.json
+
+      - name: Validate rebuilt BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/heavy-launchers-v2/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/heavy-launchers-v2/big-audit
+
+      - name: Audit patched heavy launchers
+        run: |
+          python3 tools/ci/russian_heavy_launchers_audit.py \
+            'ci-out/heavy-launchers-v2/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/heavy-launchers-v2/heavy-launchers-audit
+
+      - name: Re-run full Russian mobility audit
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/heavy-launchers-v2/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/heavy-launchers-v2/mobility-audit
+
+      - name: Gate expected V2 speed values
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+
+          build = json.load(open(
+              'ci-out/heavy-launchers-v2/build-validation.json',
+              encoding='utf-8'
+          ))
+          audit = json.load(open(
+              'ci-out/heavy-launchers-v2/heavy-launchers-audit/heavy-launchers-audit.json',
+              encoding='utf-8'
+          ))
+          mobility = json.load(open(
+              'ci-out/heavy-launchers-v2/mobility-audit/russian-mobility-audit.json',
+              encoding='utf-8'
+          ))
+
+          if build['unchanged_entries'] != 621:
+              raise SystemExit(
+                  f"Expected 621 unchanged BIG entries, got {build['unchanged_entries']}"
+              )
+          if len(build['changed_entries']) != 1:
+              raise SystemExit(
+                  f"Expected one changed BIG entry, got {len(build['changed_entries'])}"
+              )
+
+          locos = {
+              x['name']: x['fields']
+              for x in audit['locomotors']
+              if x.get('defined')
+          }
+
+          expected = {
+              'TopolLocomotor': {'Speed': '28', 'SpeedDamaged': '22', 'TurnRate': '35'},
+              'ScudLauncherLocomotor': {'Speed': '23', 'SpeedDamaged': '17', 'TurnRate': '35'},
+              'BuratinoLocomotor': {'Speed': '43', 'SpeedDamaged': '27', 'TurnRate': '52'},
+              'MSTALocomotor': {'Speed': '35', 'SpeedDamaged': '32', 'TurnRate': '45'},
+          }
+
+          for name, fields in expected.items():
+              if name not in locos:
+                  raise SystemExit(f'Missing locomotor {name}')
+              for field, value in fields.items():
+                  actual = str(locos[name].get(field))
+                  if actual != value:
+                      raise SystemExit(
+                          f'{name}.{field}: expected {value}, got {actual}'
+                      )
+
+          object_to_loco = {
+              x['name']: x['locomotor']
+              for x in audit['objects']
+          }
+          for obj in ('RussiaVehicleGrumble', 'RussiaVehicleTornado', 'RussiaVehicleIskander'):
+              if object_to_loco.get(obj) != 'ScudLauncherLocomotor':
+                  raise SystemExit(
+                      f'{obj} is not using ScudLauncherLocomotor: '
+                      f"{object_to_loco.get(obj)}"
+                  )
+
+          if mobility['summary']['missing_locomotors'] != 0:
+              raise SystemExit('V2 introduced a missing locomotor')
+          if mobility['summary']['findings'] > 24:
+              raise SystemExit(
+                  f"Mobility findings regressed too far: {mobility['summary']['findings']}"
+              )
+
+          print(
+              'OK: Heavy Launchers Speed V2 passed; '
+              f"mobility findings={mobility['summary']['findings']}"
+          )
+          PY
+
+      - name: Print concise reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/heavy-launchers-v2/build-validation.json
+          cat ci-out/heavy-launchers-v2/heavy-launchers-audit/heavy-launchers-audit.md
+          sed -n '1,160p' ci-out/heavy-launchers-v2/mobility-audit/russian-mobility-audit.md
+
+      - name: Upload test-ready Heavy Launchers V2 archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russian-heavy-launchers-speed-v2
+          path: ci-out/heavy-launchers-v2/
+          if-no-files-found: error
+          retention-days: 14
