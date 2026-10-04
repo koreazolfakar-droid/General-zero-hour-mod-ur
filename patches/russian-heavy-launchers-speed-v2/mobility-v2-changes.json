@@ -1,0 +1,147 @@
+{
+  "target_entry": "Data\\INI\\Locomotor.ini",
+  "changes": {
+    "SentinelTankLocomotor": {
+      "TurnRate": {
+        "from": 25,
+        "to": 40
+      },
+      "TurnRateDamaged": {
+        "from": 25,
+        "to": 35
+      },
+      "Acceleration": {
+        "from": 15,
+        "to": 35
+      },
+      "AccelerationDamaged": {
+        "from": 15,
+        "to": 30
+      },
+      "Braking": {
+        "from": 50,
+        "to": 65
+      }
+    },
+    "GolemLocomotor": {
+      "TurnRate": {
+        "from": 35,
+        "to": 45
+      },
+      "TurnRateDamaged": {
+        "from": 35,
+        "to": 40
+      },
+      "Acceleration": {
+        "from": 15,
+        "to": 40
+      },
+      "AccelerationDamaged": {
+        "from": 15,
+        "to": 35
+      },
+      "Braking": {
+        "from": 50,
+        "to": 65
+      }
+    },
+    "KodiakTankLocomotor": {
+      "TurnRate": {
+        "from": 40,
+        "to": 50
+      },
+      "TurnRateDamaged": {
+        "from": 40,
+        "to": 45
+      }
+    },
+    "BuratinoLocomotor": {
+      "TurnRate": {
+        "from": 40,
+        "to": 52
+      },
+      "TurnRateDamaged": {
+        "from": 40,
+        "to": 48
+      },
+      "Speed": {
+        "from": 40,
+        "to": 43
+      },
+      "SpeedDamaged": {
+        "from": 25,
+        "to": 27
+      }
+    },
+    "ScudLauncherLocomotor": {
+      "TurnRate": {
+        "from": 20,
+        "to": 35
+      },
+      "TurnRateDamaged": {
+        "from": 25,
+        "to": 30
+      },
+      "Braking": {
+        "from": 50,
+        "to": 65
+      },
+      "MinTurnSpeed": {
+        "from": 15,
+        "to": 0
+      },
+      "Speed": {
+        "from": 20,
+        "to": 23
+      },
+      "SpeedDamaged": {
+        "from": 15,
+        "to": 17
+      }
+    },
+    "TopolLocomotor": {
+      "TurnRate": {
+        "from": 20,
+        "to": 35
+      },
+      "TurnRateDamaged": {
+        "from": 15,
+        "to": 30
+      },
+      "Acceleration": {
+        "from": 55,
+        "to": 65
+      },
+      "AccelerationDamaged": {
+        "from": 45,
+        "to": 55
+      },
+      "Braking": {
+        "from": 50,
+        "to": 65
+      },
+      "MinTurnSpeed": {
+        "from": 15,
+        "to": 0
+      },
+      "Speed": {
+        "from": 25,
+        "to": 28
+      },
+      "SpeedDamaged": {
+        "from": 20,
+        "to": 22
+      }
+    },
+    "MSTALocomotor": {
+      "Speed": {
+        "from": 32,
+        "to": 35
+      },
+      "SpeedDamaged": {
+        "from": 30,
+        "to": 32
+      }
+    }
+  }
+}
