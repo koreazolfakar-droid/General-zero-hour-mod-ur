@@ -97,9 +97,9 @@ jobs:
           if not checks['rider2_weapon_correct']:
               raise SystemExit('Armed Topol does not use TopolMissileWeapon')
 
-          if audit['rearm']['build_time'] != '180':
+          if audit['rearm']['build_time'] != '180.0':
               raise SystemExit(
-                  f"Rearm BuildTime expected 180, got {audit['rearm']['build_time']}"
+                  f"Rearm BuildTime expected 180.0, got {audit['rearm']['build_time']}"
               )
           if audit['rearm']['build_cost'] != '5000':
               raise SystemExit(
