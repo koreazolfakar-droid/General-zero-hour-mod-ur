@@ -1,0 +1,168 @@
+name: Russia Mobile Command Visibility V1 CI
+
+on:
+  push:
+    branches:
+      - fix/russia-mobile-command-visibility-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: russia-mobile-command-visibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify Russian mobile command visibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build Russian Fix Pack baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/russia-mobile-visibility/stage1
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/russia-mobile-visibility/stage1/!!ProjectXRe_INI.big' \
+            --report ci-out/russia-mobile-visibility/russian-build-validation.json
+
+      - name: Build All Factions Structural Fix baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/russia-mobile-visibility/stage2
+          python3 tools/ci/build_all_factions_structural_v1.py \
+            --source 'ci-out/russia-mobile-visibility/stage1/!!ProjectXRe_INI.big' \
+            --commandsets patches/all-factions-structural-v1/CommandSet.addition.ini \
+            --ocls patches/all-factions-structural-v1/ObjectCreationList.addition.ini \
+            --output 'ci-out/russia-mobile-visibility/stage2/!!ProjectXRe_INI.big' \
+            --report ci-out/russia-mobile-visibility/all-factions-build-validation.json
+
+      - name: Build Russian Mobile Command Visibility V1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/russia-mobile-visibility/patched
+          python3 tools/ci/build_russia_mobile_command_visibility_v1.py \
+            --source 'ci-out/russia-mobile-visibility/stage2/!!ProjectXRe_INI.big' \
+            --output 'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/russia-mobile-visibility/mobile-visibility-build.json
+
+      - name: Validate rebuilt BIG
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russia-mobile-visibility/big-audit
+
+      - name: Verify Russian mobile command positions
+        run: |
+          python3 tools/ci/verify_russia_mobile_command_visibility_v1.py \
+            'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/russia-mobile-visibility/mobile-visibility-verification.json
+
+      - name: Re-run all-factions structural audit
+        run: |
+          python3 tools/ci/all_factions_audit.py \
+            'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russia-mobile-visibility/all-factions-audit
+
+      - name: Re-run Russian Fix Pack verification
+        run: |
+          python3 tools/ci/verify_russian_fixpack_v1.py \
+            'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            --out ci-out/russia-mobile-visibility/russian-fixpack-verification.json
+
+      - name: Re-run Russian mobility audit
+        run: |
+          python3 tools/ci/russian_mobility_audit.py \
+            'ci-out/russia-mobile-visibility/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/russia-mobile-visibility/mobility-audit
+
+      - name: Regression gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          base='ci-out/russia-mobile-visibility'
+
+          build=json.load(open(f'{base}/mobile-visibility-build.json',encoding='utf-8'))
+          visible=json.load(open(f'{base}/mobile-visibility-verification.json',encoding='utf-8'))
+          factions=json.load(open(f'{base}/all-factions-audit/all-factions-audit.json',encoding='utf-8'))
+          russian=json.load(open(f'{base}/russian-fixpack-verification.json',encoding='utf-8'))
+          mobility=json.load(open(f'{base}/mobility-audit/russian-mobility-audit.json',encoding='utf-8'))
+
+          if build['entry_count'] != 622:
+              raise SystemExit(f"BIG entry count changed: {build['entry_count']}")
+          if build['unchanged_entries'] != 621:
+              raise SystemExit(
+                  f"Expected 621 byte-identical entries, got {build['unchanged_entries']}"
+              )
+          if build['changed_entries'] != ['Data\\INI\\CommandSet.ini']:
+              raise SystemExit(f"Unexpected changed entries: {build['changed_entries']}")
+          if visible['status'] != 'ok':
+              raise SystemExit('Mobile visibility verification failed')
+
+          combat={
+              f['family']:f for f in factions['factions']
+              if f['family'] not in {'Civilian','Observer'}
+          }
+          unresolved={
+              family:combat[family]['typed_unresolved_count']
+              for family in sorted(combat)
+          }
+          if any(unresolved.values()):
+              raise SystemExit(f'Structural regression: {unresolved}')
+
+          if russian['status'] != 'ok':
+              raise SystemExit('Russian Fix Pack regression')
+          if mobility['summary']['missing_locomotors'] != 0:
+              raise SystemExit('Missing locomotor regression')
+          if mobility['summary']['findings'] != 23:
+              raise SystemExit(
+                  f"Mobility findings changed: {mobility['summary']['findings']}"
+              )
+
+          print('OK: Russia Mobile Command Visibility V1 regression gate passed')
+          print('OK: Kashtan, Component Tower and Rocket System command remain present')
+          print('OK: only CommandSet.ini changed in stage 3')
+          print('OK: all five combat factions still have 0 typed unresolved refs')
+          PY
+
+      - name: Print reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/russia-mobile-visibility/mobile-visibility-build.json
+          cat ci-out/russia-mobile-visibility/mobile-visibility-verification.json
+          sed -n '1,120p' ci-out/russia-mobile-visibility/all-factions-audit/all-factions-audit.md
+
+      - name: Upload test-ready mobile visibility fix
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-russia-mobile-command-visibility-v1
+          path: ci-out/russia-mobile-visibility/
+          if-no-files-found: error
+          retention-days: 14
