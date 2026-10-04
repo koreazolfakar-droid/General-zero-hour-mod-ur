@@ -67,6 +67,22 @@ def main() -> int:
         command_buttons={d.name for d in defs if d.kind=="CommandButton"}
         objects={d.name for d in defs if d.kind=="Object"}
 
+        # Some shipped OCL symbols (for example OilPoolGrowingObjectBig) are
+        # already used by the original mod without a normal Object definition
+        # visible to this parser. Treat a missing ObjectNames target as safe
+        # only when it is demonstrably a pre-existing shared OCL symbol.
+        object_name_ref_counts=defaultdict(int)
+        for d in defs:
+            if d.kind != "ObjectCreationList":
+                continue
+            for line in d.body.splitlines():
+                m=re.match(
+                    r"^\s*ObjectNames\s*=\s*([A-Za-z_][A-Za-z0-9_]*)",
+                    line
+                )
+                if m:
+                    object_name_ref_counts[m.group(1)] += 1
+
         commandset_checks=[]
         for name in sorted(EXPECTED_COMMANDSETS):
             d=by_name[name][0]
@@ -93,9 +109,15 @@ def main() -> int:
                 )
                 if m:
                     object_names.append(m.group(1))
-            missing=[x for x in object_names if x not in objects]
+            missing=[
+                x for x in object_names
+                if x not in objects and object_name_ref_counts[x] <= 1
+            ]
             if missing:
-                raise AuditError(f"{name}: missing created objects {missing}")
+                raise AuditError(
+                    f"{name}: created objects are neither defined nor "
+                    f"pre-existing shared OCL symbols: {missing}"
+                )
             ocl_checks.append({
                 "name":name,
                 "object_names":object_names,
