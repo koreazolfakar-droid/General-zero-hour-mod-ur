@@ -1,0 +1,55 @@
+name: Topol Screen Darkening Audit CI
+
+on:
+  push:
+    branches:
+      - analysis/topol-screen-darkening
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: topol-darkening-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit persistent screen darkening after Topol launch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Run focused visual-effect audit
+        run: |
+          python3 tools/ci/topol_screen_darkening_audit.py \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/topol-darkening
+
+      - name: Print report
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -n '1,360p' ci-out/topol-darkening/topol-screen-darkening-audit.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-topol-screen-darkening-audit
+          path: ci-out/topol-darkening/
+          if-no-files-found: error
+          retention-days: 14
