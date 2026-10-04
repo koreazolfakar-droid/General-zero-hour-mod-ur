@@ -63,7 +63,7 @@ MAPPED_IMAGE_DEF_RE = re.compile(
     r"(?m)^\s*MappedImage\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
 )
 BUTTON_IMAGE_FIELD_RE = re.compile(
-    r"(?mi)^\s*(?:ButtonImage|SelectedImage|Image)\s*=\s*([^\s;]+)"
+    r"(?mi)^\s*ButtonImage\s*(?:=\s*)?([^\s;]+)"
 )
 STRING_KEY_LINE_RE = re.compile(
     r"(?m)^\s*([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+)\s*$"
@@ -118,11 +118,58 @@ def meaningful_ref(relation: str, target: str) -> bool:
         return False
     return True
 
-def all_global_unresolved(definitions: list[Definition]) -> list[dict]:
-    by_name: dict[str, list[Definition]] = defaultdict(list)
-    for d in definitions:
-        by_name[d.name].append(d)
-    known = set(by_name)
+def build_expected_kind_symbols(ini_archives: list[Path]) -> dict[str, set[str]]:
+    symbols: dict[str, set[str]] = defaultdict(set)
+
+    patterns = {
+        "Object": re.compile(
+            r"(?m)^(?:Object|ChildObject|ObjectReskin)\s+"
+            r"([A-Za-z_][A-Za-z0-9_]*)"
+            r"(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*(?:;[^\r\n]*)?$"
+        ),
+        "CommandButton": re.compile(
+            r"(?m)^CommandButton\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "CommandSet": re.compile(
+            r"(?m)^CommandSet\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "Science": re.compile(
+            r"(?m)^Science\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "Upgrade": re.compile(
+            r"(?m)^Upgrade\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "Weapon": re.compile(
+            r"(?m)^Weapon\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "Armor": re.compile(
+            r"(?m)^Armor\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "Locomotor": re.compile(
+            r"(?m)^Locomotor\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "SpecialPower": re.compile(
+            r"(?m)^SpecialPower\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "ObjectCreationList": re.compile(
+            r"(?m)^ObjectCreationList\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+        "FXList": re.compile(
+            r"(?m)^FXList\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+        ),
+    }
+
+    for archive in ini_archives:
+        for _path, text in read_all_text_entries(archive):
+            for kind, pattern in patterns.items():
+                symbols[kind].update(pattern.findall(text))
+    return symbols
+
+
+def all_global_unresolved(
+    definitions: list[Definition],
+    symbols_by_kind: dict[str, set[str]],
+) -> list[dict]:
 
     rows = []
     seen = set()
@@ -130,10 +177,10 @@ def all_global_unresolved(definitions: list[Definition]) -> list[dict]:
         for relation, target in typed_reference_candidates(d):
             if not meaningful_ref(relation, target):
                 continue
-            if target in known:
-                continue
             expected = EXPECTED_KIND.get(relation)
             if expected is None:
+                continue
+            if target in symbols_by_kind.get(expected, set()):
                 continue
             key = (d.name, d.kind, d.path, relation, target)
             if key in seen:
@@ -151,33 +198,54 @@ def all_global_unresolved(definitions: list[Definition]) -> list[dict]:
     rows.sort(key=lambda x:(x["source_path"], x["source_line"], x["source"], x["relation"], x["target"]))
     return rows
 
-def duplicate_groups(definitions: list[Definition]) -> list[dict]:
-    by_key: dict[tuple[str,str], list[Definition]] = defaultdict(list)
-    for d in definitions:
-        if d.kind in DUP_BLOCK_KINDS:
-            by_key[(d.kind, d.name)].append(d)
-
+def duplicate_groups(ini_archives: list[Path]) -> list[dict]:
+    kinds = (
+        "CommandButton", "Locomotor", "FXList", "ObjectCreationList",
+        "CommandSet", "Weapon", "Armor", "Upgrade", "SpecialPower",
+        "ParticleSystem",
+    )
     groups = []
-    for (kind, name), defs in sorted(by_key.items()):
-        if len(defs) < 2:
-            continue
-        norm_bodies = [normalize_body(d.body) for d in defs]
-        hashes = [hashlib.sha256(b.encode("latin-1", errors="replace")).hexdigest() for b in norm_bodies]
-        groups.append({
-            "kind": kind,
-            "name": name,
-            "count": len(defs),
-            "identical": len(set(norm_bodies)) == 1,
-            "locations": [
-                {
-                    "archive": d.archive,
-                    "path": d.path,
-                    "line": d.start_line,
-                    "body_sha256": h,
-                }
-                for d, h in zip(defs, hashes)
-            ],
-        })
+
+    for archive in ini_archives:
+        for path, text in read_all_text_entries(archive):
+            for kind in kinds:
+                pattern = re.compile(
+                    rf"(?m)^{re.escape(kind)}\s+"
+                    r"([A-Za-z_][A-Za-z0-9_]*)\s*$"
+                )
+                rows: dict[str, list[tuple[int,str]]] = defaultdict(list)
+                matches = list(pattern.finditer(text))
+                for idx, m in enumerate(matches):
+                    start = m.start()
+                    end = matches[idx+1].start() if idx+1 < len(matches) else len(text)
+                    # This body slice is used only to tell exact duplicates from
+                    # differing same-file definitions; locations are authoritative.
+                    body = normalize_body(text[start:end])
+                    rows[m.group(1)].append(
+                        (text.count("\n",0,start)+1, body)
+                    )
+                for name, defs in rows.items():
+                    if len(defs) < 2:
+                        continue
+                    bodies=[b for _line,b in defs]
+                    groups.append({
+                        "kind":kind,
+                        "name":name,
+                        "count":len(defs),
+                        "identical":len(set(bodies))==1,
+                        "locations":[
+                            {
+                                "archive":archive.name,
+                                "path":path,
+                                "line":line,
+                                "body_sha256":hashlib.sha256(
+                                    body.encode("latin-1",errors="replace")
+                                ).hexdigest(),
+                            }
+                            for line,body in defs
+                        ],
+                    })
+    groups.sort(key=lambda x:(x["kind"],x["name"],x["locations"][0]["path"]))
     return groups
 
 def mapped_image_audit(ini_archives: list[Path]) -> dict:
@@ -237,15 +305,19 @@ def controlbar_audit(ini_archives: list[Path], eng_archive: Path) -> dict:
 
     keys = set()
     eng_files = []
-    for path, text in read_all_text_entries(eng_archive):
-        if Path(path).suffix.lower() != ".str":
-            continue
-        found = set(STRING_KEY_LINE_RE.findall(text))
-        keys.update(found)
-        eng_files.append({
-            "path": path,
-            "keys": len(found),
-        })
+
+    string_archives = [*ini_archives, eng_archive]
+    for string_archive in string_archives:
+        for path, text in read_all_text_entries(string_archive):
+            if Path(path).suffix.lower() != ".str":
+                continue
+            found = set(STRING_KEY_LINE_RE.findall(text))
+            keys.update(found)
+            eng_files.append({
+                "archive": string_archive.name,
+                "path": path,
+                "keys": len(found),
+            })
 
     missing = []
     for key in sorted(refs):
@@ -312,8 +384,9 @@ def main() -> int:
                 "warnings": info["warnings"],
             })
 
-        unresolved = all_global_unresolved(definitions)
-        duplicates = duplicate_groups(definitions)
+        symbols_by_kind = build_expected_kind_symbols(args.ini)
+        unresolved = all_global_unresolved(definitions, symbols_by_kind)
+        duplicates = duplicate_groups(args.ini)
         mapped = mapped_image_audit(args.ini)
         strings = controlbar_audit(args.ini, args.eng)
         endings = line_ending_audit(args.ini)
