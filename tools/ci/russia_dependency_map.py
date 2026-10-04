@@ -8,6 +8,7 @@ and emits JSON/Markdown/DOT reports suitable for GitHub Actions artifacts.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import sys
@@ -374,6 +375,39 @@ def generate_reports(
         for item in unresolved
         if item["source"] in russian_scope and item["russian_namespace"]
     ]
+
+    relation_target_kind = {
+        "starting-building": "Object",
+        "starting-unit": "Object",
+        "build-object": "Object",
+        "projectile-object": "Object",
+        "prerequisite-object": "Object",
+        "command-set": "CommandSet",
+        "command-button": "CommandButton",
+        "science": "Science",
+        "intrinsic-science": "Science",
+        "prerequisite-science": "Science",
+        "upgrade": "Upgrade",
+        "triggered-by": "Upgrade",
+        "conflicts-with": "Upgrade",
+        "special-power": "SpecialPower",
+        "weapon": "Weapon",
+        "locomotor": "Locomotor",
+        "armor": "Armor",
+        "ocl": "ObjectCreationList",
+        "fx": "FXList",
+    }
+    names_by_kind: dict[str, list[str]] = defaultdict(list)
+    for name, defs in by_name.items():
+        for kind in {d.kind for d in defs}:
+            names_by_kind[kind].append(name)
+    for item in unresolved_russian:
+        expected = relation_target_kind.get(item["relation"])
+        item["expected_kind"] = expected
+        pool = sorted(set(names_by_kind.get(expected, []))) if expected else sorted(by_name)
+        item["suggestions"] = difflib.get_close_matches(
+            item["target"], pool, n=8, cutoff=0.42
+        )
 
     type_counts = Counter(node["kind"] for node in nodes)
     object_counts = Counter(
