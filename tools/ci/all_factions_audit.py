@@ -125,6 +125,8 @@ def player_identity(defn: Definition) -> dict:
 
     if is_russia:
         family = "Russia"
+    elif (starting_building or "").startswith("Europe") or re.search(r"(?i)SCIENCE_Europe|\bEurope", body):
+        family = "Europe"
     elif side:
         family = side
     elif defn.name.startswith("FactionAmerica"):
@@ -185,10 +187,38 @@ def main() -> int:
             ]
 
             typed_unresolved = []
+            sentinels = {"none", "yes", "no", "true", "false", "null", "0"}
             for u in scoped_unresolved:
                 expected = RELATION_TARGET_KIND.get(u["relation"])
                 if expected is None:
                     continue
+
+                target = u["target"]
+                relation = u["relation"]
+                low = target.lower()
+
+                # Ignore engine sentinel/boolean values that are intentionally
+                # not symbol references.
+                if low in sentinels:
+                    continue
+
+                # RequiresAllTriggers is a boolean, not an Upgrade reference.
+                if relation == "requires-trigger":
+                    continue
+
+                # Tighten typed fields to their normal namespaces. This avoids
+                # false positives from unrelated fields inside large blocks.
+                if "science" in relation and not target.startswith("SCIENCE_"):
+                    continue
+                if relation in {"upgrade", "triggered-by", "conflicts-with"} and not target.startswith("Upgrade_"):
+                    continue
+                if relation == "command-set" and "CommandSet" not in target:
+                    continue
+                if relation == "command-button" and not target.startswith("Command_"):
+                    continue
+                if relation == "ocl" and not target.startswith("OCL_"):
+                    continue
+
                 typed_unresolved.append({
                     **u,
                     "expected_kind": expected,
@@ -276,13 +306,18 @@ def main() -> int:
             key=lambda x: (-x["affected_count"], x["source"], x["relation"], x["target"])
         )
 
+        combat_factions = [
+            f for f in factions if f["family"] not in {"Civilian", "Observer"}
+        ]
+
         summary = {
             "player_templates": len(factions),
+            "combat_factions": len(combat_factions),
             "families": dict(Counter(f["family"] for f in factions)),
-            "critical_factions": sum(f["severity"] == "critical" for f in factions),
-            "warning_factions": sum(f["severity"] == "warning" for f in factions),
-            "review_factions": sum(f["severity"] == "review" for f in factions),
-            "clean_factions": sum(f["severity"] == "clean" for f in factions),
+            "critical_factions": sum(f["severity"] == "critical" for f in combat_factions),
+            "warning_factions": sum(f["severity"] == "warning" for f in combat_factions),
+            "review_factions": sum(f["severity"] == "review" for f in combat_factions),
+            "clean_factions": sum(f["severity"] == "clean" for f in combat_factions),
             "all_definitions": len(definitions),
             "unique_symbols": len(by_name),
             "duplicate_symbol_names": len(duplicate_names),
@@ -316,6 +351,7 @@ def main() -> int:
             "## Summary",
             "",
             f"- PlayerTemplates: **{summary['player_templates']}**",
+            f"- Combat factions: **{summary['combat_factions']}**",
             f"- Families: **{summary['families']}**",
             f"- Critical factions: **{summary['critical_factions']}**",
             f"- Warning factions: **{summary['warning_factions']}**",
