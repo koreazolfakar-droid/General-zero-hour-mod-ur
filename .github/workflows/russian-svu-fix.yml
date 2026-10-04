@@ -1,0 +1,97 @@
+name: Russian SVU Sniper Fix CI
+
+on:
+  push:
+    branches:
+      - fix/russian-svu-commandset
+  pull_request:
+    branches:
+      - analysis/russian-dependency-map
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: svu-fix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build and verify SVU command set fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Build minimal fixed INI archive
+        run: |
+          mkdir -p ci-out/svu-fix/patched
+          python3 tools/ci/build_svu_commandset_fix.py \
+            --source '!!ProjectXRe_INI.big' \
+            --addition patches/russian-svu-commandset/CommandSet.addition.ini \
+            --output 'ci-out/svu-fix/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/svu-fix/svu-fix-validation.json
+
+      - name: Validate rebuilt BIG structure
+        run: |
+          python3 tools/ci/baseline_audit.py big \
+            'ci-out/svu-fix/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/svu-fix/big-audit
+
+      - name: Rebuild Russian dependency map against fixed archive
+        run: |
+          python3 tools/ci/russia_dependency_map.py \
+            'ci-out/svu-fix/patched/!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/svu-fix/dependency-map
+
+      - name: Gate on SVU reference resolution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          p = 'ci-out/svu-fix/dependency-map/russia-dependency-map.json'
+          d = json.load(open(p, encoding='utf-8'))
+          unresolved = d['potential_unresolved_russian_refs']
+          bad = [
+              x for x in unresolved
+              if x['source'] == 'RussiaInfantrySVUSniper'
+              and x['target'] == 'RussianInfantrySVUSniperCommandSet'
+          ]
+          if bad:
+              raise SystemExit('SVU CommandSet reference is still unresolved')
+          if len(unresolved) != 2:
+              raise SystemExit(
+                  f'Expected only the two dormant unresolved references, got {len(unresolved)}'
+              )
+          print('OK: SVU missing reference removed; only 2 dormant unresolved references remain')
+          PY
+
+      - name: Print validation report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/svu-fix/svu-fix-validation.json
+          sed -n '1,120p' ci-out/svu-fix/dependency-map/russia-dependency-map.md
+
+      - name: Upload test-ready fixed archive and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-svu-sniper-fix
+          path: ci-out/svu-fix/
+          if-no-files-found: error
+          retention-days: 14
