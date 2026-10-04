@@ -1,0 +1,90 @@
+name: Global INI Integrity V1 CI
+
+on:
+  push:
+    branches:
+      - analysis/global-ini-integrity-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-ini-integrity-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit global INI references duplicates strings and images
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big,!ProjectXRe_Eng.big' --exclude=''
+
+      - name: Build Russian Fix Pack baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/global-integrity/stage1
+          python3 tools/ci/build_russian_fixpack_v1.py \
+            --source '!!ProjectXRe_INI.big' \
+            --mobility-spec patches/russian-heavy-launchers-speed-v2/mobility-v2-changes.json \
+            --svu-addition patches/russian-fixpack-v1/CommandSet.addition.ini \
+            --topol-spec patches/russian-fixpack-v1/topol-fix.json \
+            --output 'ci-out/global-integrity/stage1/!!ProjectXRe_INI.big' \
+            --report ci-out/global-integrity/russian-build-validation.json
+
+      - name: Build All Factions Structural Fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/global-integrity/stage2
+          python3 tools/ci/build_all_factions_structural_v1.py \
+            --source 'ci-out/global-integrity/stage1/!!ProjectXRe_INI.big' \
+            --commandsets patches/all-factions-structural-v1/CommandSet.addition.ini \
+            --ocls patches/all-factions-structural-v1/ObjectCreationList.addition.ini \
+            --output 'ci-out/global-integrity/stage2/!!ProjectXRe_INI.big' \
+            --report ci-out/global-integrity/all-factions-build-validation.json
+
+      - name: Build Russian Mobile Command Visibility V1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out/global-integrity/patched
+          python3 tools/ci/build_russia_mobile_command_visibility_v1.py \
+            --source 'ci-out/global-integrity/stage2/!!ProjectXRe_INI.big' \
+            --output 'ci-out/global-integrity/patched/!!ProjectXRe_INI.big' \
+            --report ci-out/global-integrity/mobile-visibility-build.json
+
+      - name: Run global integrity audit
+        run: |
+          python3 tools/ci/global_ini_integrity_audit.py \
+            --ini 'ci-out/global-integrity/patched/!!ProjectXRe_INI.big' '!ProjectXRe_CloseINI.big' \
+            --eng '!ProjectXRe_Eng.big' \
+            --out ci-out/global-integrity/report
+
+      - name: Print report
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -n '1,900p' ci-out/global-integrity/report/global-ini-integrity.md
+
+      - name: Upload global integrity audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-global-ini-integrity-v1
+          path: ci-out/global-integrity/
+          if-no-files-found: error
+          retention-days: 14
