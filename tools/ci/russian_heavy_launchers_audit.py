@@ -18,7 +18,7 @@ from russia_dependency_map import parse_definitions, strip_comments
 
 TERMS = ("topol", "grumble", "buratino", "msta", "tornado", "iskander")
 LOCO_RE = re.compile(
-    r"(?mi)^\s*Locomotor\s*=\s*SET_NORMAL\s+([A-Za-z_][A-Za-z0-9_]*)"
+    r"(?mi)^\s*Locomotor\s*(?:=\s*)?SET_NORMAL\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
 FIELD_RE = re.compile(
     r"(?mi)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;\r\n]+)"
