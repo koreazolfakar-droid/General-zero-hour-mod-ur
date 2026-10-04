@@ -1,0 +1,17 @@
+{
+  "science_commandset": "SCIENCE_Russia_CommandSetRank8",
+  "purchase_button": "Command_PurchaseScienceICBMClearance",
+  "topol_base_commandset": "RussiaVehicleTopolCommandSet",
+  "topol_armed_commandset": "RussiaVehicleTopolUpgradedCommandSet",
+  "fire_button": "Command_TacticalNuclearStrike",
+  "rearm_upgrade": "Upgrade_RussiaTopolMIRVMissileUpgrade",
+  "rearm_build_time": {
+    "from": "480.0",
+    "to": "180.0"
+  },
+  "rearm_build_cost": "5000",
+  "shadow_objects": [
+    "TopolWarheadReentryObject",
+    "RussianTacticalNukeStrikeWarningDecal"
+  ]
+}
