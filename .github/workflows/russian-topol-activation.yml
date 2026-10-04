@@ -1,0 +1,59 @@
+name: Russian Topol Activation CI
+
+on:
+  push:
+    branches:
+      - analysis/russian-topol-activation
+  pull_request:
+    branches:
+      - analysis/russian-dependency-map
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: russian-topol-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  topol-audit:
+    name: Audit Topol / ICBM activation chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download only INI and CloseINI archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Run focused Topol activation audit
+        run: |
+          python3 tools/ci/russian_topol_activation_audit.py \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/topol-activation
+
+      - name: Print report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci-out/topol-activation/topol-activation-audit.md
+
+      - name: Upload Topol activation audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-topol-activation-audit
+          path: ci-out/topol-activation/
+          if-no-files-found: error
+          retention-days: 14
