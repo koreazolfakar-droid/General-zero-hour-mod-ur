@@ -81,6 +81,7 @@ def main() -> int:
                 "locomotor":loco,
                 "build_cost":first(a,"BuildCost"),
                 "build_time":first(a,"BuildTime"),
+                "body": d.body if loco is None else None,
                 "geometry":{
                     k:first(a,k) for k in (
                         "Geometry","GeometryMajorRadius","GeometryMinorRadius",
@@ -152,6 +153,10 @@ def main() -> int:
         )
         for o in result["objects"]:
             print(f"OBJECT: {o['name']} -> {o['locomotor']}")
+            if o["locomotor"] is None:
+                print("NO_LOCO_BODY_BEGIN", o["name"])
+                print(o["body"])
+                print("NO_LOCO_BODY_END", o["name"])
         for l in locomotors:
             if l["defined"]:
                 print(f"LOCO: {l['name']} {json.dumps(l['fields'])}")
