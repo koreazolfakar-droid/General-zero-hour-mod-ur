@@ -91,6 +91,66 @@ def parse_extended(archive: Path) -> tuple[list[Definition], dict]:
     return definitions, {"metadata": metadata, "warnings": warnings}
 
 
+def meaningful_ref(relation: str, target: str) -> bool:
+    low = target.lower()
+    if low in {"none", "yes", "no", "true", "false", "null", "0"}:
+        return False
+    if relation == "requires-trigger":
+        return False
+    if "science" in relation and not target.startswith("SCIENCE_"):
+        return False
+    if relation in {"upgrade", "triggered-by", "conflicts-with"} and not target.startswith("Upgrade_"):
+        return False
+    if relation == "command-set" and "CommandSet" not in target:
+        return False
+    if relation == "command-button" and not target.startswith("Command_"):
+        return False
+    if relation == "ocl" and not target.startswith("OCL_"):
+        return False
+    return True
+
+
+def build_typed_graph(definitions: list[Definition]):
+    by_name: dict[str, list[Definition]] = defaultdict(list)
+    for d in definitions:
+        by_name[d.name].append(d)
+
+    known = set(by_name)
+    edge_set: set[tuple[str, str, str]] = set()
+    unresolved = []
+
+    for d in definitions:
+        refs = list(typed_reference_candidates(d))
+
+        # ChildObject/ObjectReskin inheritance is part of the real object
+        # dependency chain but is not covered by the stock parser.
+        first_line = d.body.splitlines()[0] if d.body.splitlines() else ""
+        m = re.match(
+            r"^(?:ChildObject|ObjectReskin)\s+[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)",
+            first_line,
+        )
+        if m:
+            refs.append(("parent-object", m.group(1)))
+
+        for relation, target in refs:
+            if not meaningful_ref(relation, target):
+                continue
+            if target in known:
+                edge_set.add((d.name, target, relation))
+            else:
+                unresolved.append({
+                    "source": d.name,
+                    "source_kind": d.kind,
+                    "source_path": d.path,
+                    "relation": relation,
+                    "target": target,
+                    "russian_namespace": False,
+                })
+
+    edges = [Edge(*x) for x in sorted(edge_set)]
+    return by_name, edges, unresolved
+
+
 def reachable_from(root: str, edges: list[Edge]) -> set[str]:
     adjacency: dict[str, set[str]] = defaultdict(set)
     for edge in edges:
@@ -163,7 +223,7 @@ def main() -> int:
             definitions.extend(defs)
             archives.append({"name": archive.name, **info})
 
-        by_name, edges, unresolved = build_graph(definitions)
+        by_name, edges, unresolved = build_typed_graph(definitions)
         roots = [d for d in definitions if d.kind == "PlayerTemplate"]
         if not roots:
             raise AuditError("No PlayerTemplate definitions found")
@@ -187,41 +247,13 @@ def main() -> int:
             ]
 
             typed_unresolved = []
-            sentinels = {"none", "yes", "no", "true", "false", "null", "0"}
             for u in scoped_unresolved:
                 expected = RELATION_TARGET_KIND.get(u["relation"])
-                if expected is None:
+                if expected is None and u["relation"] != "parent-object":
                     continue
-
-                target = u["target"]
-                relation = u["relation"]
-                low = target.lower()
-
-                # Ignore engine sentinel/boolean values that are intentionally
-                # not symbol references.
-                if low in sentinels:
-                    continue
-
-                # RequiresAllTriggers is a boolean, not an Upgrade reference.
-                if relation == "requires-trigger":
-                    continue
-
-                # Tighten typed fields to their normal namespaces. This avoids
-                # false positives from unrelated fields inside large blocks.
-                if "science" in relation and not target.startswith("SCIENCE_"):
-                    continue
-                if relation in {"upgrade", "triggered-by", "conflicts-with"} and not target.startswith("Upgrade_"):
-                    continue
-                if relation == "command-set" and "CommandSet" not in target:
-                    continue
-                if relation == "command-button" and not target.startswith("Command_"):
-                    continue
-                if relation == "ocl" and not target.startswith("OCL_"):
-                    continue
-
                 typed_unresolved.append({
                     **u,
-                    "expected_kind": expected,
+                    "expected_kind": expected or "Object",
                 })
 
             active_build_buttons = []
