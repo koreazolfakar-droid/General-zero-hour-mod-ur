@@ -1,0 +1,52 @@
+name: Russian Heavy Launchers Speed V2 CI
+
+on:
+  push:
+    branches:
+      - fix/russian-heavy-launchers-speed-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heavy-launchers-v2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit heavy launcher mobility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without full LFS download
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Download required BIG archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='!!ProjectXRe_INI.big,!ProjectXRe_CloseINI.big' --exclude=''
+
+      - name: Audit Russian heavy launchers
+        run: |
+          python3 tools/ci/russian_heavy_launchers_audit.py \
+            '!!ProjectXRe_INI.big' \
+            '!ProjectXRe_CloseINI.big' \
+            --out ci-out/heavy-launchers-v2
+
+      - name: Print report
+        run: cat ci-out/heavy-launchers-v2/heavy-launchers-audit.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectxre-heavy-launchers-v2-audit
+          path: ci-out/heavy-launchers-v2/
+          if-no-files-found: error
+          retention-days: 14
