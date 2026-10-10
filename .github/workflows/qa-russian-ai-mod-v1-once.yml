@@ -1,0 +1,82 @@
+name: QA and stage Project X Russian AI mod fix (one time)
+on:
+  push:
+    branches: [fix/projectx-russian-skirmish-ai-v1-20261011]
+    paths: [.github/workflows/qa-russian-ai-mod-v1-once.yml]
+permissions:
+  contents: write
+jobs:
+  patch-mod-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/projectx-russian-skirmish-ai-v1-20261011
+          fetch-depth: 0
+          lfs: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.gitattributes
+            /!!ProjectXRe_INI.big
+            /scripts/
+            /.github/workflows/qa-russian-ai-mod-v1-once.yml
+      - name: Fetch exactly the original 27MB LFS BIG and verify immutable baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs version
+          git lfs install --local
+          git lfs fetch --include='!!ProjectXRe_INI.big' --exclude=''
+          git lfs checkout -- '!!ProjectXRe_INI.big'
+          ls -lh -- '!!ProjectXRe_INI.big'
+          git lfs ls-files
+          python3 - <<'PY'
+          import hashlib,pathlib
+          f=pathlib.Path('!!ProjectXRe_INI.big')
+          assert f.stat().st_size == 27160453
+          assert hashlib.sha256(f.read_bytes()).hexdigest() == '214a17c3d501ec756d82f375353e329dfe0e7e074dc9f5f9e2d42d8fbe6f5fe4'
+          print('PASS: exact original Git LFS BIG restored; all other mod assets untouched')
+          PY
+      - name: Generate updated Russian mod archive without rebuilding any game engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/patch_russian_skirmish_defense.py '!!ProjectXRe_INI.big' "$RUNNER_TEMP/!!ProjectXRe_INI.big"
+          python3 - <<'PY'
+          import hashlib,importlib.util,os,pathlib
+          spec=importlib.util.spec_from_file_location('patcher','scripts/patch_russian_skirmish_defense.py')
+          mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+          before=pathlib.Path('!!ProjectXRe_INI.big').read_bytes()
+          after=(pathlib.Path(os.environ['RUNNER_TEMP'])/'!!ProjectXRe_INI.big').read_bytes()
+          old,_=mod.index_big(before)
+          new,_=mod.index_big(after)
+          assert len(old)==len(new)==622
+          orig={name:before[off:off+size] for name,row,off,size in old}
+          changed={name:after[off:off+size] for name,row,off,size in new}
+          assert set(orig)==set(changed)
+          assert [name for name in orig if orig[name]!=changed[name]]==[r'Data\INI\Default\AIData.ini']
+          assert mod.patch(before) == after
+          assert hashlib.sha256(after).hexdigest()==mod.EXPECTED_OUTPUT_SHA256
+          print('PASS: 621 files byte-identical, one AI setting changed; same archive format and 622 entries')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: projectx-russian-skirmish-ai-v1-verified-big
+          path: ${{ runner.temp }}/!!ProjectXRe_INI.big
+          if-no-files-found: error
+          retention-days: 90
+      - name: Commit only corrected BIG to feature branch using Git LFS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'fix/projectx-russian-skirmish-ai-v1-20261011'
+          cp "$RUNNER_TEMP/!!ProjectXRe_INI.big" '!!ProjectXRe_INI.big'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git check-attr filter -- '!!ProjectXRe_INI.big' | grep -q ': lfs'
+          git add -- '!!ProjectXRe_INI.big'
+          test "$(git diff --cached --name-only)" = '!!ProjectXRe_INI.big'
+          git commit -m 'fix(projectx-ai): correct Russian Kashtan skirmish defense template'
+          git push origin HEAD:refs/heads/fix/projectx-russian-skirmish-ai-v1-20261011
+          echo 'PASS: verified mod-only BIG replacement committed on review branch' >> "$GITHUB_STEP_SUMMARY"
