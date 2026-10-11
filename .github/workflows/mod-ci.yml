@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Download shipped archives, visual overlay and immutable baseline
+      - name: Download shipped archives, both overlays and immutable baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -53,9 +53,11 @@ jobs:
           python scripts/validate_mod.py --baseline "$baseline" --report "$RUNNER_TEMP/verified-mod/mod-validation.json"
           cp '!!ProjectXRe_INI.big' "$RUNNER_TEMP/verified-mod/!!ProjectXRe_INI.big"
           cp '!!!ProjectXRe_RussianVisualsV1.big' "$RUNNER_TEMP/verified-mod/!!!ProjectXRe_RussianVisualsV1.big"
+          cp '!!!!ProjectXRe_RussianDestructionV1.big' "$RUNNER_TEMP/verified-mod/!!!!ProjectXRe_RussianDestructionV1.big"
           cp docs/visuals/*.jpg "$RUNNER_TEMP/verified-mod/"
           cp visuals/v1/INSTALL.md "$RUNNER_TEMP/verified-mod/INSTALL-visuals.md"
-          echo 'PASS: 9 base archives + 7 DDS overlay entries, 22743 total entries; 618 INI payloads and 8 original BIGs unchanged. Visual DDS codecs/mips/alpha verified. Static validation only; game/device QA pending.' >> "$GITHUB_STEP_SUMMARY"
+          cp effects/v1/INSTALL.md "$RUNNER_TEMP/verified-mod/INSTALL-destruction.md"
+          echo 'PASS: 9 base archives + 7 DDS entries + 16 destruction entries, 22759 total entries. Original archives preserved. Finite building effects and unchanged gameplay bytes verified. Static validation only; game/device QA pending.' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish verified installable archives, visual previews and validation report
         uses: actions/upload-artifact@v4
         with:

@@ -1,5 +1,11 @@
 # General Zero Hour — Project X Remastered Russian Mod
 
+## Russian Building Destruction v1 (11 Oct 2026)
+
+**[Download the optional destruction BIG](https://media.githubusercontent.com/media/koreazolfakar-droid/General-zero-hour-mod-ur/main/%21%21%21%21ProjectXRe_RussianDestructionV1.big)** — 4.24 MB. Adds warm flashes, brief fireballs, spreading dust, rising fading smoke, sparks and small debris to the existing Russian building collapse stages. Fourteen building files use small/medium/large effects. Weapons, other factions, vehicle explosions, existing 3D debris and all gameplay values are preserved.
+
+Put `!!!!ProjectXRe_RussianDestructionV1.big` alongside the nine base archives; keep its four leading `!` characters so it takes precedence over the base INI. It can be used with the texture overlay below. No engine/APK update is included. See [installation, effect budgets and game/phone test checklist](effects/v1/INSTALL.md). CI verifies 24 finite particle templates, 15 FX lists, all reused sprites/audio events, unchanged gameplay bytes and reproducible packing; actual game/device appearance and FPS remain untested.
+
 ## Russian Visuals v1 — first texture pass (11 Oct 2026)
 
 **[Download the optional visual BIG](https://media.githubusercontent.com/media/koreazolfakar-droid/General-zero-hour-mod-ur/main/%21%21%21ProjectXRe_RussianVisualsV1.big)** — 6.29 MB. Adds seven 1024×1024 diffuse atlases for the coal power plant, barracks, command center and Kodiak hull/standard turret. Concrete, masonry and metal panels have more visible material detail. Original models and gameplay definitions are preserved. Several shared Russian factory/BMD/waypoint surfaces also receive the new textures; separate snow/night/damage atlases are unchanged.
@@ -26,7 +32,7 @@ The text sources in `repairs/` append definitions to three existing INI files. O
 - Baseline commit: `670b62f10f39ffe9016fa7f4e529816fa08ef460`
 - Baseline INI SHA-256: `83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25`
 - Current INI SHA-256: `0b5797d866c3389f4528fdca99b06c22c29058670928c71441c4726179f0d060`
-- CI: `.github/workflows/mod-ci.yml` runs on every pull request and main push. It tests malformed-archive rejection on Python 3.10/3.12, downloads the nine base LFS archives plus the optional visual overlay, checks 22,743 indexed entries, resolves the repaired references against the shipped assets, and reproduces the current INI archive byte-for-byte. A successful run provides the installable INI archive, visual overlay, offline previews and a JSON verification report.
+- CI: `.github/workflows/mod-ci.yml` runs on every pull request and main push. It tests malformed-archive rejection on Python 3.10/3.12, downloads the nine base LFS archives plus both optional overlays, checks 22,759 indexed entries, resolves the repaired references against the shipped assets, and reproduces the current INI archive and both overlays byte-for-byte. A successful run provides the installable INI archive, both overlays, installation notes, offline texture previews and a JSON verification report.
 
 **Install:** Download the current BIG through Git LFS or a successful CI artifact. Back up and replace your existing `!!ProjectXRe_INI.big` with it. Keep the other eight archives and the working load order. The `repairs/` directory is build input, not an additional loose INI installation.
 
@@ -38,7 +44,7 @@ python3 scripts/patch_russian_references.py /path/to/baseline.big /path/to/repai
 python3 scripts/validate_mod.py --baseline /path/to/baseline.big
 ```
 
-The validator expects all nine current base BIG files plus the declared visual overlay in this checkout. Do not feed the repaired archive back into the patcher: it intentionally accepts only the pinned baseline.
+The validator expects all nine current base BIG files plus both declared overlays in this checkout. Do not feed the repaired archive back into the patcher: it intentionally accepts only the pinned baseline.
 
 **Remaining validation and source gaps:** CI verifies data and references; it does not launch Generals or run an Android/device test. In game, check SVU controls/airdrop, Iskander/Su-34 ground targeting, Ogre death debris, Mishka damaged armor and Russian Hard AI defense construction. Missing upgraded damaged helicopter meshes (`RVHellion_UD`, `RVHnchBck_UD`, `RVHind_UD`), Grizon's `RVBBMP_B` exit-bone model and Kodiak variant wreck meshes still need the correct authored assets. No replacement mesh is guessed. No `SkirmishScripts.scb` exists in these nine archives; a tactical AI overhaul requires the actual intended scripts. These repairs do not change Topol's upgrade prerequisite or artillery speed/reload values.
 

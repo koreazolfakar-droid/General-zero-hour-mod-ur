@@ -1,0 +1,29 @@
+{
+  "archive": "!!!!ProjectXRe_RussianDestructionV1.big",
+  "source_ini_sha256": "0b5797d866c3389f4528fdca99b06c22c29058670928c71441c4726179f0d060",
+  "size": 4243944,
+  "sha256": "59adcdbaefe3caeee808c53f9b198faf7fb2b19ecab8cd310273678b62d8a7d9",
+  "building_groups": {
+    "data/ini/object/russia/buildings/airfield.ini": "Large",
+    "data/ini/object/russia/buildings/barracks.ini": "Medium",
+    "data/ini/object/russia/buildings/coalpowerplant.ini": "Medium",
+    "data/ini/object/russia/buildings/commandbunker.ini": "Large",
+    "data/ini/object/russia/buildings/helipad.ini": "Medium",
+    "data/ini/object/russia/buildings/industrialplant.ini": "Large",
+    "data/ini/object/russia/buildings/missilesilo.ini": "Medium",
+    "data/ini/object/russia/buildings/outpostairraid.ini": "Small",
+    "data/ini/object/russia/buildings/outpostobservation.ini": "Small",
+    "data/ini/object/russia/buildings/outpostradar.ini": "Small",
+    "data/ini/object/russia/buildings/supplywarhouse.ini": "Medium",
+    "data/ini/object/russia/buildings/tremor.ini": "Large",
+    "data/ini/object/russia/buildings/warfactory.ini": "Large",
+    "data/ini/object/russia/buildings/weaponbunker.ini": "Medium"
+  },
+  "particles_per_invocation": {
+    "Initial": 16,
+    "Delay": 10,
+    "Burst": 14,
+    "Final": 30,
+    "InstantDeath": 42
+  }
+}
