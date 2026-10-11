@@ -1,10 +1,6 @@
-# Russian Visuals v1 — optional diffuse texture update
+# Russian Visuals v1 — embedded in the original Art BIG
 
-Download **`!!!ProjectXRe_RussianVisualsV1.big`** (6,292,735 bytes) through Git LFS, the direct download in the repository README, or a successful `projectx-russian-mod-verified` CI artifact. Put this one additional BIG in the same mod directory as the existing nine Project X archives. Keep its exact filename and load it ahead of `!ProjectXRe_Art.big`; the engine's alphabetically-first archive precedence makes the three leading `!` characters significant. Restart the game after installation.
-
-Do not install the `visuals/v1/Art/Textures` source folder as loose files. Do not replace the original Art BIG. To roll back, remove only `!!!ProjectXRe_RussianVisualsV1.big` and restart.
-
-SHA-256: `9b99add57f84b9351e4db73e534fbf990e168cb93e751d6bae6f709ac94942e5`
+The seven updated textures are now inside `!ProjectXRe_Art.big`. Replace that original mod file using the download in the repository README. Follow [the combined installation guide](../../updates/integrated-v1/INSTALL.md); remove any previously installed standalone visual/destruction BIGs. No additional BIG or loose DDS folder is needed.
 
 | Main target | Updated atlases | Resolution |
 | --- | --- | --- |
@@ -19,9 +15,9 @@ Some atlases are shared: the industrial plant and war factory use `RBBarr_2`; th
 
 ## Verification and remaining game checks
 
-CI checks archive indexes, original archive preservation, the seven DDS hashes, compression headers, mip extents, alpha masks at all levels, and deterministic reconstruction of the overlay. The comparison JPGs are offline renders of the actual W3D models with simplified lighting, not screenshots. The renderer does not execute game animations or particles.
+CI checks archive indexes, original archive preservation, the seven DDS hashes, compression headers, mip extents, alpha masks at all levels, and exact preservation of all other Art payloads and index bytes. The comparison JPGs are offline renders of the actual W3D models with simplified lighting, not screenshots. The renderer does not execute game animations or particles.
 
-Game/device testing is still required: inspect the three buildings and Kodiak at normal/close zoom, test blue/red player colors, building doors and infantry exits, Kodiak turret movement and upgrades, damage/rubble, snow/night transitions, Russian waypoint markers and the shared factory/BMD areas. Compare FPS and memory with and without the overlay in the same scene. If the new visuals do not appear, verify archive precedence in the active engine build. No APK or engine update is included.
+Game/device testing is still required: inspect the three buildings and Kodiak at normal/close zoom, test blue/red player colors, building doors and infantry exits, Kodiak turret movement and upgrades, damage/rubble, snow/night transitions, Russian waypoint markers and the shared factory/BMD areas. Compare FPS and memory before and after replacing the original Art archive in the same scene. If the new visuals do not appear, confirm that the active mod directory contains the downloaded original Art archive. No APK or engine update is included.
 
 ## Rebuild
 

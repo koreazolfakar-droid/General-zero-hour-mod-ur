@@ -88,7 +88,7 @@ class DestructionTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('MOD_ARCHIVE_TESTS') == '1', 'requires downloaded BIG archives')
 class ShippedDestructionTests(unittest.TestCase):
-    def test_overlay_reproduces_and_all_original_gameplay_bytes_are_preserved(self):
+    def test_integrated_ini_reproduces_and_all_gameplay_bytes_are_preserved(self):
         validate(ROOT)
 
 

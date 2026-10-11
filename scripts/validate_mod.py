@@ -9,9 +9,8 @@ import re
 
 from big_archive import payloads, read_index
 from patch_russian_references import APPENDS, CHANGED_PATHS, MISHKA, SOURCE_SHA256, patch
-from build_russian_visuals import ARCHIVE as VISUAL_ARCHIVE
 from validate_russian_visuals import validate as validate_visuals
-from build_russian_destruction import ARCHIVE as DESTRUCTION_ARCHIVE
+from build_russian_destruction import APPENDS as EFFECT_APPENDS, BUILDINGS, build as build_ini
 from validate_russian_destruction import validate as validate_destruction
 
 
@@ -108,17 +107,22 @@ def validate(root, baseline, report=None):
     require([e.name for e in read_index(source)] == [e.name for e in read_index(shipped)],
             "archive entry names or ordering changed")
     require(set(before) == set(after) and len(after) == 622, "archive entry set changed")
-    require({p for p in before if before[p] != after[p]} == CHANGED_PATHS,
+    changed_paths = CHANGED_PATHS | set(EFFECT_APPENDS) | set(BUILDINGS)
+    require({p for p in before if before[p] != after[p]} == changed_paths,
             "unexpected payload changes")
     for target in APPENDS:
         require(after[target].startswith(before[target]), "existing definitions were edited/deleted")
     require(before[MISHKA].replace(b"RVMishka_U_D", b"RVMishka_UD") == after[MISHKA],
             "unexpected Mishka change")
-    require(patch(source) == shipped, "shipped BIG differs from reproducible repair sources")
+    require(build_ini(root, patch(source)) == shipped, "shipped INI differs from reproducible repairs and effects")
     manifest = json.loads((root / "tests/baseline_manifest.json").read_text())
-    has_visuals = (root / 'visuals/v1/manifest.json').exists()
-    has_destruction = (root / 'effects/v1/manifest.json').exists()
-    expected_archives = set(manifest) | ({VISUAL_ARCHIVE} if has_visuals else set()) | ({DESTRUCTION_ARCHIVE} if has_destruction else set())
+    integrated = json.loads((root / 'updates/integrated-v1/manifest.json').read_text())
+    require(set(integrated['archives']) == {'!ProjectXRe_Art.big', '!!ProjectXRe_INI.big'}, 'unexpected integrated archive scope')
+    require(integrated['source_ini_baseline_sha256'] == SOURCE_SHA256 and
+            integrated['source_art_sha256'] == manifest['!ProjectXRe_Art.big']['sha256'], 'integration source manifest changed')
+    require(integrated['additional_archives'] == 0 and integrated['art_replacements'] == 7 and
+            integrated['ini_effect_replacements'] == 16, 'integration scope counts changed')
+    expected_archives = set(manifest)
     require({f.name for f in root.glob("*.big")} == expected_archives, "missing or unexpected mod archive")
     archives, assets = [], set()
     for name, expected in manifest.items():
@@ -126,29 +130,26 @@ def validate(root, baseline, report=None):
             entries = read_index(data)
             digest = hashlib.sha256(data).hexdigest()
             require(len(entries) == expected["entries"], "entry count changed: " + name)
-            if name != "!!ProjectXRe_INI.big":
+            if name in integrated['archives']:
+                require(digest == integrated['archives'][name]['sha256'] and len(data) == integrated['archives'][name]['size'], "integrated archive digest changed: " + name)
+            else:
                 require(digest == expected["sha256"], "unrelated archive changed: " + name)
             if name == "!ProjectXRe_Art.big":
                 assets = {e.key for e in entries}
             archives.append({"archive": name, "entries": len(entries), "sha256": digest})
     check_references(after, assets)
-    visuals = validate_visuals(root) if has_visuals else None
-    destruction = validate_destruction(root) if has_destruction else None
+    visuals = validate_visuals(root)
+    destruction = validate_destruction(root)
     result = {"archives": archives, "total_entries": sum(a["entries"] for a in archives),
-              "changed_ini_entries": sorted(CHANGED_PATHS), "unchanged_ini_entries": 618,
+              "changed_ini_entries": sorted(changed_paths), "unchanged_ini_entries": 622-len(changed_paths),
               "baseline_sha256": SOURCE_SHA256,
               "validation": "static archive integrity, references and byte preservation; no game/device execution"}
-    if visuals:
-        result['visuals'] = visuals
-        result['total_entries'] += len(visuals['textures'])
-    if destruction:
-        result['destruction'] = destruction
-        result['total_entries'] += destruction['entries']
+    result['visuals'], result['destruction'] = visuals, destruction
     if report:
         report.write_text(json.dumps(result, indent=2) + "\n")
-    print("PASS: 9 base archives" + (" + visual overlay" if visuals else "") + (" + destruction overlay" if destruction else ""), "/", result["total_entries"], "entries; 618 INI payloads and 8 other BIGs unchanged")
+    print("PASS: 9 original archives /", result["total_entries"], "entries;", result['unchanged_ini_entries'], "INI payloads, 10664 Art payloads and 7 other BIGs unchanged")
     print("PASS: SVU controls/ability, both targeting templates, Ogre wreck, Mishka asset and Kashtan AI")
-    print("PASS: shipped INI archive reproduced byte-for-byte from reviewed repair sources")
+    print("PASS: updates embedded in original INI/Art archives; no overlay installation")
     return result
 
 
