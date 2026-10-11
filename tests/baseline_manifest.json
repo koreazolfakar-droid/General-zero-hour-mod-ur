@@ -1,0 +1,38 @@
+{
+  "!!ProjectXRe_INI.big": {
+    "entries": 622,
+    "sha256": "83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25"
+  },
+  "!ProjectXRe_Art.big": {
+    "entries": 10671,
+    "sha256": "038768a89b6d4081da68e6bbc8bdaa4fafb3616e563f478b1812fe766c2fde11"
+  },
+  "!ProjectXRe_Audio.big": {
+    "entries": 9716,
+    "sha256": "c5534f0076cc76a9751914c4d3ea902385b602cd8cb80fa4598fd09988732f62"
+  },
+  "!ProjectXRe_CloseINI.big": {
+    "entries": 35,
+    "sha256": "9e76b64fef7b4c3d5b2dee0777126b3a3a027520a567af1738cee767a8ca8e99"
+  },
+  "!ProjectXRe_Eng.big": {
+    "entries": 1,
+    "sha256": "6d847ef6228fed27bea3fc035921f4fa248309db0cc8b2b97aab9ce32b843e5c"
+  },
+  "!ProjectXRe_Maps.big": {
+    "entries": 558,
+    "sha256": "2c53103237b54a300f636c5685d96860cba6a12bbae06d84a2d9501ff8032e83"
+  },
+  "!ProjectXRe_Music.big": {
+    "entries": 76,
+    "sha256": "63b600a3a0c80135fc2d8b9ca9d97e4b7ef934d6b9ace29235b0543218a4f806"
+  },
+  "!ProjectXRe_Voice.big": {
+    "entries": 983,
+    "sha256": "db30c03a885c0bf53315e7da224f4b449c13a1d05c26271ed3b19c1ed7321bbd"
+  },
+  "!ProjectXRe_Window.big": {
+    "entries": 74,
+    "sha256": "fa480ab1a7ebde70843386af656a932f99394cbaa898187845b9a996560fe29b"
+  }
+}
