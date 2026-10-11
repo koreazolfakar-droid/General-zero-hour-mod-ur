@@ -1,0 +1,18 @@
+{
+  "base_commit": "afc5b1e802b8481db9857f2c6c2e2bda2eb73009",
+  "source_art_sha256": "038768a89b6d4081da68e6bbc8bdaa4fafb3616e563f478b1812fe766c2fde11",
+  "source_ini_baseline_sha256": "83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25",
+  "archives": {
+    "!ProjectXRe_Art.big": {
+      "size": 1253328669,
+      "sha256": "3bb7303c2d21b76c88a180c1eaac55bfef3b800a8670174868a93e2def3ab150"
+    },
+    "!!ProjectXRe_INI.big": {
+      "size": 27195960,
+      "sha256": "3db5bf594d1df512f35c330d3bf8465647bae8d97ceffb05dca7535705135532"
+    }
+  },
+  "art_replacements": 7,
+  "ini_effect_replacements": 16,
+  "additional_archives": 0
+}

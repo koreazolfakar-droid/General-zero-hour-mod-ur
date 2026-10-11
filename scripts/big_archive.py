@@ -1,5 +1,7 @@
 """Read BIGF/BIG4 indexes without extracting or executing archive contents."""
 from dataclasses import dataclass
+import mmap
+from pathlib import Path
 import struct
 
 
@@ -95,3 +97,73 @@ def replace_payloads(data, replacements):
     struct.pack_into("<I", output, 4, len(output))
     read_index(output)
     return bytes(output)
+
+
+def replace_file(source, target, replacements):
+    """Stream a large original archive, keeping index names, order and padding."""
+    if Path(source).resolve() == Path(target).resolve():
+        raise ValueError('source and target must differ')
+    with open(source, 'rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        entries = read_index(data)
+        if set(replacements) - {e.key for e in entries}:
+            raise ValueError('replacement path absent from archive')
+        ordered = sorted(entries, key=lambda e: e.offset)
+        header = bytearray(data[:ordered[0].offset])
+        cursor = ordered[0].offset
+        output_offset = len(header)
+        for entry in ordered:
+            output_offset += entry.offset - cursor
+            size = len(replacements[entry.key]) if entry.key in replacements else entry.size
+            struct.pack_into('>II', header, entry.row, output_offset, size)
+            output_offset += size
+            cursor = entry.offset + entry.size
+        output_offset += len(data) - cursor
+        struct.pack_into('<I', header, 4, output_offset)
+        with open(target, 'wb') as output:
+            output.write(header)
+            cursor = ordered[0].offset
+            for entry in ordered:
+                output.write(data[cursor:entry.offset])
+                if entry.key in replacements:
+                    output.write(replacements[entry.key])
+                else:
+                    for offset in range(entry.offset, entry.offset + entry.size, 1024 * 1024):
+                        output.write(data[offset:min(offset + 1024 * 1024, entry.offset + entry.size)])
+                cursor = entry.offset + entry.size
+            output.write(data[cursor:])
+    with open(target, 'rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        read_index(data)
+
+
+def check_replacement(before, after, replacements):
+    """Prove only declared payloads and necessary index length/offsets changed."""
+    old, new = read_index(before), read_index(after)
+    if [e.name for e in old] != [e.name for e in new]:
+        raise ValueError('archive names/order changed')
+    if set(replacements) - {e.key for e in old}:
+        raise ValueError('replacement path absent from archive')
+    targets = {e.key: e for e in new}
+    first = min(e.offset for e in old)
+    header = bytearray(before[:first])
+    struct.pack_into('<I', header, 4, len(after))
+    old_cursor = new_cursor = first
+    delta = 0
+    for entry in sorted(old, key=lambda e: e.offset):
+        target = targets[entry.key]
+        expected = replacements.get(entry.key)
+        size = len(expected) if expected is not None else entry.size
+        if target.offset != entry.offset + delta or target.size != size:
+            raise ValueError('unexpected payload offset/size: ' + entry.key)
+        if before[old_cursor:entry.offset] != after[new_cursor:target.offset]:
+            raise ValueError('archive padding changed')
+        original = before[entry.offset:entry.offset + entry.size]
+        actual = after[target.offset:target.offset + target.size]
+        if actual != (original if expected is None else expected):
+            raise ValueError('unexpected payload content: ' + entry.key)
+        struct.pack_into('>II', header, entry.row, target.offset, target.size)
+        old_cursor, new_cursor = entry.offset + entry.size, target.offset + target.size
+        delta += size - entry.size
+    if len(after) != len(before) + delta or before[old_cursor:] != after[new_cursor:]:
+        raise ValueError('archive trailing bytes changed')
+    if after[:first] != header:
+        raise ValueError('archive header bytes changed')

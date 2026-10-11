@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "archive": "!!!ProjectXRe_RussianVisualsV1.big",
+  "archive": "!ProjectXRe_Art.big",
   "base_commit": "e49df279c0bf1d89968ed405241ea0e17b8f156c",
   "source_art_sha256": "038768a89b6d4081da68e6bbc8bdaa4fafb3616e563f478b1812fe766c2fde11",
   "textures": [
@@ -103,6 +103,6 @@
       "generated_png_sha256": "f0964a3031acf3c22547bbcef0762c243b5584d9e7fd10acfb19724fc650d0d6"
     }
   ],
-  "scope": "Diffuse texture overlay; original models, INI and nine BIGs unchanged.",
+  "scope": "Seven diffuse texture replacements embedded in original Art BIG; models and other Art payloads preserved.",
   "validation": "DDS decoding and offline model preview; game/device QA still required."
 }

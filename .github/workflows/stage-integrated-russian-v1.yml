@@ -1,0 +1,47 @@
+name: Stage verified updates in original BIG files once
+on:
+  push:
+    branches: [feat/russian-updates-in-original-big]
+    paths: [.github/workflows/stage-integrated-russian-v1.yml]
+permissions:
+  contents: write
+jobs:
+  stage-originals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/russian-updates-in-original-big
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download shipped archives and pinned originals
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='*.big' --exclude=''
+          git fetch --depth=1 origin 670b62f10f39ffe9016fa7f4e529816fa08ef460
+          git lfs fetch origin 670b62f10f39ffe9016fa7f4e529816fa08ef460 --include='!!ProjectXRe_INI.big' --exclude=''
+          git fetch --depth=1 origin afc5b1e802b8481db9857f2c6c2e2bda2eb73009
+          git lfs fetch origin afc5b1e802b8481db9857f2c6c2e2bda2eb73009 --include='!ProjectXRe_Art.big' --exclude=''
+      - name: Integrate and verify originals without extra BIG files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/integrate_russian_updates.py
+          MOD_ARCHIVE_TESTS=1 python -m unittest discover -s tests -v
+          baseline="$(git rev-parse --git-dir)/lfs/objects/83/c6/83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25"
+          python scripts/validate_mod.py --baseline "$baseline"
+      - name: Commit only the two verified original LFS archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '!ProjectXRe_Art.big' '!!ProjectXRe_INI.big'
+          python -c 'import subprocess; assert set(subprocess.check_output(["git","diff","--cached","--name-only"],text=True).splitlines()) == {"!ProjectXRe_Art.big","!!ProjectXRe_INI.big"}'
+          git commit -m 'mod: stage verified graphics and destruction inside original BIGs'
+          git push origin HEAD:feat/russian-updates-in-original-big

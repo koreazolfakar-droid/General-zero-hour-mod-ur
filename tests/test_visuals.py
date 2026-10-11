@@ -52,7 +52,7 @@ class DDSTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('MOD_ARCHIVE_TESTS')=='1','requires downloaded BIG archives')
 class ShippedVisualTests(unittest.TestCase):
-    def test_overlay_reproduces_and_all_alpha_mips_match_originals(self):
+    def test_embedded_art_preserves_other_payloads_and_all_alpha_mips(self):
         validate(ROOT)
 
 if __name__=='__main__':unittest.main()

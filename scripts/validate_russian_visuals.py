@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Validate the texture-only overlay, DDS mip chains and original alpha masks."""
+"""Validate embedded textures, DDS mips, alpha masks and Art preservation."""
 import argparse
 import hashlib
 import json
 import mmap
 from pathlib import Path
 import struct
-from big_archive import payloads, read_index
-from build_russian_visuals import ARCHIVE, build
+from big_archive import check_replacement, read_index
+from build_russian_visuals import ARCHIVE, make_files
+from integrate_russian_updates import baseline_path, ART_SHA256
 
 def require(condition, message):
     if not condition:
@@ -66,13 +67,13 @@ def nearest_alpha(original, ow, oh, width, height):
 def validate(root, report=None):
     folder = root / 'visuals/v1'
     manifest = json.loads((folder / 'manifest.json').read_text())
-    data = (root / ARCHIVE).read_bytes()
-    require(data == build(root), 'shipped visual BIG differs from canonical DDS sources')
-    files = payloads(data)
-    require(set(files) == {r['path'].lower() for r in manifest['textures']}, 'overlay scope changed')
+    files = make_files(root)
+    require(set(files) == {r['path'].lower() for r in manifest['textures']}, 'texture scope changed')
     rows = []
-    with (root / '!ProjectXRe_Art.big').open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as art:
+    with baseline_path(root, ART_SHA256).open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as art, \
+         (root / ARCHIVE).open('rb') as target_stream, mmap.mmap(target_stream.fileno(), 0, access=mmap.ACCESS_READ) as shipped:
         require(hashlib.sha256(art).hexdigest() == manifest['source_art_sha256'], 'source art archive changed')
+        check_replacement(art, shipped, files)
         index = {entry.key:entry for entry in read_index(art)}
         for row in manifest['textures']:
             texture = files[row['path'].lower()]
@@ -94,12 +95,15 @@ def validate(root, report=None):
                 if level_number == 0:
                     require(hashlib.sha256(alpha).hexdigest() == row['alpha_sha256'], 'alpha hash mismatch')
             rows.append({k:row[k] for k in ('path','sha256','width','height','fourcc','mipmaps')})
-    result = {'archive':ARCHIVE,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),
+        digest, size = hashlib.sha256(shipped).hexdigest(), len(shipped)
+        count = len(index)
+    result = {'archive':ARCHIVE,'bytes':size,'sha256':digest,'entries':count,
+              'unchanged_payloads':count-len(files),
               'textures':rows,'alpha_masks':'Exact nearest sampling of original top-level alpha at all 11 mips.',
               'validation':'Static DDS/BIG/alpha verification; offline visual preview is separate. No game/device execution.'}
     if report:
         report.write_text(json.dumps(result, indent=2) + '\n')
-    print('PASS: 7 texture-only DDS entries; 1024 square, 11 mips, original codecs/alpha; BIG reproduced byte-for-byte')
+    print('PASS: 7 DDS textures embedded in original Art; 1024 square, 11 mips, original codecs/alpha;', count-len(files), 'other payloads unchanged')
     return result
 
 if __name__ == '__main__':

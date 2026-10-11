@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from big_archive import read_index
+from integrate_russian_updates import baseline_path, ART_SHA256
 ROOT=Path(__file__).resolve().parents[1]
 TEMP=tempfile.TemporaryDirectory(prefix='russian-visual-preview-')
 WORK=Path(TEMP.name)
@@ -126,7 +127,7 @@ if __name__=='__main__':
     args=parser.parse_args()
     labels=SHARED if args.shared else LABELS
     evidence=[]
-    with (ROOT/'!ProjectXRe_Art.big').open('rb') as stream,mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as art:
+    with baseline_path(ROOT,ART_SHA256).open('rb') as stream,mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as art:
         index={e.key:e for e in read_index(art)}
         needed=set()
         for name,_ in labels:

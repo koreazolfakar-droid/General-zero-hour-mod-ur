@@ -7,8 +7,11 @@ import mmap
 from pathlib import Path
 import re
 
-from big_archive import payloads, read_index, write_big
+from big_archive import payloads, read_index
 from build_russian_destruction import ARCHIVE, APPENDS, BUILDINGS, NEWLINE, SOURCE_SHA256, make_files, rewired
+from integrate_russian_updates import baseline_path
+from patch_russian_references import SOURCE_SHA256 as BASELINE_SHA256, patch
+from build_russian_destruction import build
 
 ROLES = {'Flash': 1, 'Fireball': 3, 'DustRing': 12, 'CollapseDust': 14,
          'BurstDust': 6, 'Smoke': 6, 'Sparks': 4, 'Debris': 6}
@@ -180,11 +183,12 @@ def check_overlay(original, overlay):
 
 
 def validate(root):
-    source = (root / '!!ProjectXRe_INI.big').read_bytes()
+    source = patch(baseline_path(root, BASELINE_SHA256).read_bytes())
     require(hashlib.sha256(source).hexdigest() == SOURCE_SHA256, 'source INI hash mismatch')
     original = payloads(source)
     shipped = (root / ARCHIVE).read_bytes()
-    overlay = payloads(shipped)
+    all_files = payloads(shipped)
+    overlay = {path: all_files[path] for path in set(BUILDINGS) | set(APPENDS)}
     check_overlay(original, overlay)
     folder = root / 'effects/v1'
     p, f = (folder / 'ParticleSystem.ini').read_bytes(), (folder / 'FXList.ini').read_bytes()
@@ -194,17 +198,17 @@ def validate(root):
     with (root / '!ProjectXRe_Art.big').open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
         assets = {e.key for e in read_index(data)}
     report = check_sources(p, f, assets, original['data/ini/soundeffects.ini'])
-    require(write_big(make_files(root, source)) == shipped, 'destruction BIG is not reproducible')
+    require(build(root, source) == shipped, 'integrated INI BIG is not reproducible')
     manifest = json.loads((folder / 'manifest.json').read_text())
     require(manifest['archive'] == ARCHIVE and manifest['source_ini_sha256'] == SOURCE_SHA256, 'manifest source mismatch')
     digest = hashlib.sha256(shipped).hexdigest()
-    require(manifest['sha256'] == digest and manifest['size'] == len(shipped), 'destruction overlay digest mismatch')
+    require(manifest['sha256'] == digest and manifest['size'] == len(shipped), 'integrated INI digest mismatch')
     require(manifest['building_groups'] == BUILDINGS, 'manifest building scope mismatch')
     require(manifest['particles_per_invocation'] == BUDGETS, 'manifest particle budget mismatch')
-    report.update(archive=ARCHIVE, entries=len(overlay), size=len(shipped), sha256=digest,
+    report.update(archive=ARCHIVE, entries=len(all_files), changed_effect_entries=len(overlay), size=len(shipped), sha256=digest,
                   buildings=len(BUILDINGS), gameplay_preservation='all bytes except existing destruction FX references',
                   validation='static only; game and physical phone QA pending')
-    print('PASS: Russian destruction overlay; 14 building files, 24 finite particles, 15 FX lists; original gameplay bytes preserved')
+    print('PASS: Russian destruction embedded in original INI; 14 building files, 24 finite particles, 15 FX lists; gameplay bytes preserved')
     return report
 
 
