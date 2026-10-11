@@ -1,0 +1,44 @@
+name: Stage verified Russian visual overlay (temporary)
+on:
+  push:
+    branches: [feat/russian-visuals-v1]
+    paths: [.github/workflows/stage-russian-visuals-once.yml]
+permissions:
+  contents: write
+jobs:
+  build-overlay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/russian-visuals-v1
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch original archives and immutable reference-repair baseline
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='*.big' --exclude=''
+          git fetch --depth=1 origin 670b62f10f39ffe9016fa7f4e529816fa08ef460
+          git lfs fetch origin 670b62f10f39ffe9016fa7f4e529816fa08ef460 --include='!!ProjectXRe_INI.big' --exclude=''
+      - name: Rebuild overlay and verify all assets before upload
+        run: |
+          set -euo pipefail
+          python scripts/build_russian_visuals.py
+          MOD_ARCHIVE_TESTS=1 python -m unittest discover -s tests -v
+          baseline="$(git rev-parse --git-dir)/lfs/objects/83/c6/83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25"
+          python scripts/validate_mod.py --baseline "$baseline"
+      - name: Upload only verified overlay through Git LFS on the feature branch
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'feat/russian-visuals-v1'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git check-attr filter -- '!!!ProjectXRe_RussianVisualsV1.big' | grep -q ': lfs'
+          git add -- '!!!ProjectXRe_RussianVisualsV1.big'
+          test "$(git diff --cached --name-only)" = '!!!ProjectXRe_RussianVisualsV1.big'
+          git commit -m 'art: stage verified Russian visual overlay via Git LFS'
+          git push origin HEAD:refs/heads/feat/russian-visuals-v1

@@ -5,7 +5,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from big_archive import payloads, read_index, replace_payloads
+from big_archive import payloads, read_index, replace_payloads, write_big
 
 
 def fixture(names=(b"Data/A.ini", b"Data/B.ini")):
@@ -21,6 +21,14 @@ def fixture(names=(b"Data/A.ini", b"Data/B.ini")):
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_writer_matches_independent_big_fixture(self):
+        self.assertEqual(write_big({'Data/B.ini':b'beta', 'Data/A.ini':b'alpha'}), fixture())
+
+    def test_writer_rejects_duplicate_paths_and_nul(self):
+        for files in ({'Art/A.dds':b'a','art/a.dds':b'b'}, {'Art/A\0.dds':b'a'}, {'../evil':b'a'}, {}):
+            with self.subTest(files=files), self.assertRaises(ValueError):
+                write_big(files)
+
     def test_replacement_preserves_other_payload_and_names(self):
         original = fixture()
         updated = replace_payloads(original, {"data/a.ini": b"longer new content"})

@@ -1,0 +1,35 @@
+{
+  "rbbarr_1": [
+    "Art/W3D/RBBarracks.W3D"
+  ],
+  "rbbarr_2": [
+    "Art/W3D/RBBarracks.W3D",
+    "Art/W3D/RBIndstrial.W3D",
+    "Art/W3D/RBWarfct.W3D"
+  ],
+  "rbcmdbnkr1": [
+    "Art/W3D/RBComBnkr.W3D"
+  ],
+  "rbcmdbnkr2": [
+    "Art/W3D/RBComBnkr.W3D",
+    "Art/W3D/SCMRally.W3D"
+  ],
+  "rbcpwrplnt1": [
+    "Art/W3D/RBPwrPlnt.W3D",
+    "Art/W3D/RBPwrPlnt_D.W3D"
+  ],
+  "rvkodiakc": [
+    "Art/W3D/RVKodiak.W3D",
+    "Art/W3D/RVKodiak2.W3D",
+    "Art/W3D/RVKodiak3.W3D"
+  ],
+  "rvkodiakt": [
+    "Art/W3D/RVBMD1.W3D",
+    "Art/W3D/RVKodiak.W3D",
+    "Art/W3D/RVKodiak2.W3D",
+    "Art/W3D/RVKodiak2_D.W3D",
+    "Art/W3D/RVKodiak3.W3D",
+    "Art/W3D/RVKodiak3_D.W3D",
+    "Art/W3D/RVKodiak_MG.W3D"
+  ]
+}

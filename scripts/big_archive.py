@@ -57,6 +57,24 @@ def payloads(data):
     return {e.key: bytes(data[e.offset:e.offset + e.size]) for e in read_index(data)}
 
 
+def write_big(files):
+    """Build a deterministic BIGF archive from named byte payloads."""
+    items = sorted(files.items(), key=lambda item: item[0].replace('\\', '/').lower())
+    names = [name.replace('\\', '/').encode('latin-1') for name, _ in items]
+    if any(b'\0' in name for name in names):
+        raise ValueError('NUL in BIG filename')
+    header_size = 16 + sum(9 + len(name) for name in names)
+    length = header_size + sum(len(data) for _, data in items)
+    output = bytearray(b'BIGF' + struct.pack('<I', length) + struct.pack('>II', len(items), header_size))
+    offset = header_size
+    for name, (_, data) in zip(names, items):
+        output.extend(struct.pack('>II', offset, len(data)) + name + b'\0')
+        offset += len(data)
+    output.extend(b''.join(data for _, data in items))
+    read_index(output)
+    return bytes(output)
+
+
 def replace_payloads(data, replacements):
     """Keep index names/order/padding; update only offsets, sizes and file length."""
     entries = read_index(data)
