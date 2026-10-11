@@ -9,6 +9,8 @@ import re
 
 from big_archive import payloads, read_index
 from patch_russian_references import APPENDS, CHANGED_PATHS, MISHKA, SOURCE_SHA256, patch
+from build_russian_visuals import ARCHIVE as VISUAL_ARCHIVE
+from validate_russian_visuals import validate as validate_visuals
 
 
 def require(condition, message):
@@ -112,7 +114,9 @@ def validate(root, baseline, report=None):
             "unexpected Mishka change")
     require(patch(source) == shipped, "shipped BIG differs from reproducible repair sources")
     manifest = json.loads((root / "tests/baseline_manifest.json").read_text())
-    require({f.name for f in root.glob("*.big")} == set(manifest), "missing or unexpected mod archive")
+    has_visuals = (root / 'visuals/v1/manifest.json').exists()
+    expected_archives = set(manifest) | ({VISUAL_ARCHIVE} if has_visuals else set())
+    require({f.name for f in root.glob("*.big")} == expected_archives, "missing or unexpected mod archive")
     archives, assets = [], set()
     for name, expected in manifest.items():
         with (root / name).open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
@@ -125,13 +129,17 @@ def validate(root, baseline, report=None):
                 assets = {e.key for e in entries}
             archives.append({"archive": name, "entries": len(entries), "sha256": digest})
     check_references(after, assets)
+    visuals = validate_visuals(root) if has_visuals else None
     result = {"archives": archives, "total_entries": sum(a["entries"] for a in archives),
               "changed_ini_entries": sorted(CHANGED_PATHS), "unchanged_ini_entries": 618,
               "baseline_sha256": SOURCE_SHA256,
               "validation": "static archive integrity, references and byte preservation; no game/device execution"}
+    if visuals:
+        result['visuals'] = visuals
+        result['total_entries'] += len(visuals['textures'])
     if report:
         report.write_text(json.dumps(result, indent=2) + "\n")
-    print("PASS: 9 archives /", result["total_entries"], "entries; 618 INI payloads and 8 other BIGs unchanged")
+    print("PASS: 9 base archives" + (" + visual overlay" if visuals else ""), "/", result["total_entries"], "entries; 618 INI payloads and 8 other BIGs unchanged")
     print("PASS: SVU controls/ability, both targeting templates, Ogre wreck, Mishka asset and Kashtan AI")
     print("PASS: shipped INI archive reproduced byte-for-byte from reviewed repair sources")
     return result

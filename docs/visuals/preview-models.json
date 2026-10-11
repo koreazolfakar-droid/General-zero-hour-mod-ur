@@ -1,0 +1,21 @@
+{
+  "method": "Original W3D hierarchy base pose, first diffuse texture stage, UV coordinates and DDS alpha; simplified orthographic software lighting. No engine animation, particles, shadows or device execution.",
+  "models": [
+    {
+      "model": "Art\\W3D\\RBPwrPlnt.W3D",
+      "sha256": "f0867ffeaf0988e0f9ff972c4bc50341643f0c932366702e4db13bb6cd8819f8"
+    },
+    {
+      "model": "Art\\W3D\\RBBarracks.W3D",
+      "sha256": "f36394fc9b723a83793949145cb1c208f856dc9a5b044a16ead091edfb2565ef"
+    },
+    {
+      "model": "Art\\W3D\\RBComBnkr.W3D",
+      "sha256": "c805d0ea018587fcba0e06af7f2d28960a1b5d48d7a43cdf3385a2772fdb35f8"
+    },
+    {
+      "model": "Art\\W3D\\RVKodiak.W3D",
+      "sha256": "de2c9166b284d40d29eb5751de77806732eee355bae27f4b9bf5032ad8a3210f"
+    }
+  ]
+}

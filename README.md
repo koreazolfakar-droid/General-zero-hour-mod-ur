@@ -1,5 +1,14 @@
 # General Zero Hour — Project X Remastered Russian Mod
 
+## Russian Visuals v1 — first texture pass (11 Oct 2026)
+
+**[Download the optional visual BIG](https://media.githubusercontent.com/media/koreazolfakar-droid/General-zero-hour-mod-ur/main/%21%21%21ProjectXRe_RussianVisualsV1.big)** — 6.29 MB. Adds seven 1024×1024 diffuse atlases for the coal power plant, barracks, command center and Kodiak hull/standard turret. Concrete, masonry and metal panels have more visible material detail. Original models and gameplay definitions are preserved. Several shared Russian factory/BMD/waypoint surfaces also receive the new textures; separate snow/night/damage atlases are unchanged.
+
+Put `!!!ProjectXRe_RussianVisualsV1.big` alongside the existing nine BIGs, ahead of the Art archive in archive precedence. Keep the exact filename. Remove this one overlay to roll back. See [installation, scope and game-test checklist](visuals/v1/INSTALL.md).
+
+[Before/after front](docs/visuals/comparison-front.jpg) · [Before/after rear](docs/visuals/comparison-rear.jpg) · [Shared surfaces](docs/visuals/comparison-shared.jpg). These are offline previews on original W3D geometry with simplified lighting, not game screenshots. CI verifies all original archive hashes and reproduces the DDS-only overlay, including compression, all 11 mips and original alpha masks. Game/device visuals and performance still need testing. No new 3D parts, particles, explosions or APK are included in this first pass.
+
+
 ## Russian unit reference repairs and continuous validation (11 Oct 2026)
 
 The current `!!ProjectXRe_INI.big` includes the Kashtan AI fix below and these repairs:
@@ -17,7 +26,7 @@ The text sources in `repairs/` append definitions to three existing INI files. O
 - Baseline commit: `670b62f10f39ffe9016fa7f4e529816fa08ef460`
 - Baseline INI SHA-256: `83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25`
 - Current INI SHA-256: `0b5797d866c3389f4528fdca99b06c22c29058670928c71441c4726179f0d060`
-- CI: `.github/workflows/mod-ci.yml` runs on every pull request and main push. It tests malformed-archive rejection on Python 3.10/3.12, downloads all nine LFS archives, checks 22,736 indexed entries, resolves the repaired references against the shipped assets, and reproduces the current INI archive byte-for-byte. A successful run provides the installable INI archive and a JSON verification report.
+- CI: `.github/workflows/mod-ci.yml` runs on every pull request and main push. It tests malformed-archive rejection on Python 3.10/3.12, downloads the nine base LFS archives plus the optional visual overlay, checks 22,743 indexed entries, resolves the repaired references against the shipped assets, and reproduces the current INI archive byte-for-byte. A successful run provides the installable INI archive, visual overlay, offline previews and a JSON verification report.
 
 **Install:** Download the current BIG through Git LFS or a successful CI artifact. Back up and replace your existing `!!ProjectXRe_INI.big` with it. Keep the other eight archives and the working load order. The `repairs/` directory is build input, not an additional loose INI installation.
 
@@ -29,7 +38,7 @@ python3 scripts/patch_russian_references.py /path/to/baseline.big /path/to/repai
 python3 scripts/validate_mod.py --baseline /path/to/baseline.big
 ```
 
-The validator expects all nine current BIG files in this checkout. Do not feed the repaired archive back into the patcher: it intentionally accepts only the pinned baseline.
+The validator expects all nine current base BIG files plus the declared visual overlay in this checkout. Do not feed the repaired archive back into the patcher: it intentionally accepts only the pinned baseline.
 
 **Remaining validation and source gaps:** CI verifies data and references; it does not launch Generals or run an Android/device test. In game, check SVU controls/airdrop, Iskander/Su-34 ground targeting, Ogre death debris, Mishka damaged armor and Russian Hard AI defense construction. Missing upgraded damaged helicopter meshes (`RVHellion_UD`, `RVHnchBck_UD`, `RVHind_UD`), Grizon's `RVBBMP_B` exit-bone model and Kodiak variant wreck meshes still need the correct authored assets. No replacement mesh is guessed. No `SkirmishScripts.scb` exists in these nine archives; a tactical AI overhaul requires the actual intended scripts. These repairs do not change Topol's upgrade prerequisite or artillery speed/reload values.
 
