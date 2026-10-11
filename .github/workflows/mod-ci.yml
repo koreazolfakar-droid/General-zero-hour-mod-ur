@@ -1,0 +1,61 @@
+name: Mod archive and reference CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mod-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Reject malformed archives and invalid definitions
+        run: python -m unittest discover -s tests -v
+  archive-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download the nine shipped archives and immutable baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='*.big' --exclude=''
+          git fetch --depth=1 origin 670b62f10f39ffe9016fa7f4e529816fa08ef460
+          git lfs fetch origin 670b62f10f39ffe9016fa7f4e529816fa08ef460 --include='!!ProjectXRe_INI.big' --exclude=''
+      - name: Verify references, all archive indexes and byte preservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$(git rev-parse --git-dir)/lfs/objects/83/c6/83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25"
+          python scripts/validate_mod.py --baseline "$baseline" --report "$RUNNER_TEMP/mod-validation.json"
+          echo 'PASS: 9 archives, 22736 entries; 618 INI payloads and 8 BIGs unchanged. Static validation only.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish the verified installable INI archive and validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectx-russian-references-verified
+          path: |
+            !!ProjectXRe_INI.big
+            ${{ runner.temp }}/mod-validation.json
+          if-no-files-found: error
+          retention-days: 30

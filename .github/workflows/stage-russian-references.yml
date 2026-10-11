@@ -1,0 +1,46 @@
+name: Stage reviewed Russian reference repairs (one time)
+on:
+  push:
+    branches: [fix/russian-mod-references-ci]
+    paths: [.github/workflows/stage-russian-references.yml]
+permissions:
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/russian-mod-references-ci
+          lfs: false
+      - name: Download baseline and apply additive repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include='*.big' --exclude=''
+          cp '!!ProjectXRe_INI.big' "$RUNNER_TEMP/baseline.big"
+          python3 -m unittest discover -s tests -v
+          python3 scripts/patch_russian_references.py "$RUNNER_TEMP/baseline.big" "$RUNNER_TEMP/repaired.big"
+          cp "$RUNNER_TEMP/repaired.big" '!!ProjectXRe_INI.big'
+          python3 scripts/validate_mod.py --baseline "$RUNNER_TEMP/baseline.big" --report "$RUNNER_TEMP/mod-validation.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staged-russian-reference-repairs
+          path: |
+            !!ProjectXRe_INI.big
+            ${{ runner.temp }}/mod-validation.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Commit only the validated LFS archive to the repair branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'fix/russian-mod-references-ci'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '!!ProjectXRe_INI.big'
+          test "$(git diff --cached --name-only)" = '!!ProjectXRe_INI.big'
+          git commit -m 'fix(mod): ship validated Russian reference repairs in INI archive'
+          git push origin HEAD:refs/heads/fix/russian-mod-references-ci
