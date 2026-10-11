@@ -48,14 +48,15 @@ jobs:
         run: |
           set -euo pipefail
           baseline="$(git rev-parse --git-dir)/lfs/objects/83/c6/83c6616cbf7a45f0979edebd34d22a157d76751d03359bf62e62ca184d92bb25"
-          python scripts/validate_mod.py --baseline "$baseline" --report "$RUNNER_TEMP/mod-validation.json"
+          MOD_ARCHIVE_TESTS=1 python -m unittest discover -s tests -v
+          mkdir -p "$RUNNER_TEMP/verified-mod"
+          python scripts/validate_mod.py --baseline "$baseline" --report "$RUNNER_TEMP/verified-mod/mod-validation.json"
+          cp '!!ProjectXRe_INI.big' "$RUNNER_TEMP/verified-mod/!!ProjectXRe_INI.big"
           echo 'PASS: 9 archives, 22736 entries; 618 INI payloads and 8 BIGs unchanged. Static validation only.' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish the verified installable INI archive and validation report
         uses: actions/upload-artifact@v4
         with:
           name: projectx-russian-references-verified
-          path: |
-            !!ProjectXRe_INI.big
-            ${{ runner.temp }}/mod-validation.json
+          path: ${{ runner.temp }}/verified-mod/
           if-no-files-found: error
           retention-days: 30
